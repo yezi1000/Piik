@@ -8,6 +8,11 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      native_only:
+        description: Only build and check the Windows capture helper (never publishes)
+        required: false
+        default: false
+        type: boolean
       app_checks:
         description: Build and verify App and Server candidates
         required: false
@@ -48,6 +53,25 @@ concurrency:
   queue: max
 
 jobs:
+  native-capture:
+    if: github.event_name == 'workflow_dispatch' && inputs.native_only == true
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Build and check the production capture helper
+        shell: pwsh
+        run: ./native/capture/windows/build.ps1 -OutputDirectory build/native-candidate -Check
+      - name: Retain helpers for physical verification
+        uses: actions/upload-artifact@v7
+        with:
+          name: piik-native-${{ github.sha }}
+          path: build/native-candidate/*.exe
+          if-no-files-found: error
+          retention-days: 7
+
   release-notes:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -66,7 +90,7 @@ jobs:
         run: node scripts/release-notes.mjs --pull-request
 
   validate:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && !(github.event_name == 'workflow_dispatch' && inputs.native_only == true)
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.release.outputs.version }}

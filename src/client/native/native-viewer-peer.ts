@@ -144,11 +144,12 @@ export class NativeCapableViewerPeer implements ViewerMediaPeer {
           }
         }
         if (!this.backend) {
-          const availableClient = offerHasNativeVideoCodec(payload.description.sdp, true)
+          const baselineCodec = offerHasNativeVideoCodec(payload.description.sdp);
+          const availableClient = (baselineCodec || offerHasNativeVideoCodec(payload.description.sdp, true))
             ? await this.acquireNativeClient().catch(() => null)
             : null;
-          const client = availableClient && offerHasNativeVideoCodec(payload.description.sdp,
-            availableClient.health.nativeMedia.av1 === true) ? availableClient : null;
+          const client = availableClient && (baselineCodec || availableClient.health.nativeMedia.av1 === true)
+            ? availableClient : null;
           if (this.disposed) return;
           this.backend = client
             ? new NativeViewerPeer(
