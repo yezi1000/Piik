@@ -63,6 +63,24 @@ func TestSummaryDoesNotConflateVideoAudioAndEncoder(t *testing.T) {
 	}
 }
 
+func TestAV1ProbeKeepsIndependentEncoderInventories(t *testing.T) {
+	payload := strings.Replace(validProbe, `"adapters":[`, `"adapters":[{"index":1,"name":"AV1 GPU","identity":"0x0:0x2","hardwareH264":[],"hardwareAV1":[{"index":0,"name":"AV1","identity":"{av1}"}]},`, 1)
+	capabilities, err := decodeProbe([]byte(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary := capabilities.Summary(); !summary.HardwareAV1 || !summary.HardwareH264 {
+		t.Fatalf("one adapter's encoder inventory hid another: %+v", summary)
+	}
+	duplicate := strings.Replace(payload, `"hardwareAV1":[`, `"hardwareAV1":[{"index":0,"name":"duplicate","identity":"{duplicate}"},`, 1)
+	if _, err := decodeProbe([]byte(duplicate)); err == nil {
+		t.Fatal("duplicate AV1 encoder index was accepted")
+	}
+	if summary, _ := decodeProbe([]byte(validProbe)); summary.Summary().HardwareAV1 {
+		t.Fatal("legacy probe invented AV1 support")
+	}
+}
+
 func TestCaptureBorderCapabilityRequiresCaptureAndExplicitSupport(t *testing.T) {
 	for _, supported := range []bool{false, true} {
 		payload := validProbe

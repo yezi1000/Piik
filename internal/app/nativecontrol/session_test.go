@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -798,6 +799,25 @@ func TestSourceEnumerationFailureDoesNotCloseControl(t *testing.T) {
 		`{"version":10,"id":"request_options","type":"capture-options"}`,
 	)); err != nil {
 		t.Fatalf("control was unusable after source enumeration failed: %v", err)
+	}
+}
+
+func TestCaptureOptionsExposesAV1OnlyToOptedInClients(t *testing.T) {
+	session := New("missing-capture-process", nativecapture.Capabilities{Adapters: []nativecapture.Adapter{{
+		Index: 0, Name: "GPU", Identity: "gpu", HardwareH264: []nativecapture.Encoder{},
+		HardwareAV1: []nativecapture.Encoder{{Index: 0, Name: "AV1", Identity: "av1"}},
+	}}}, false, nil)
+	t.Cleanup(func() { _ = session.Close() })
+	for _, optIn := range []bool{false, true, false} {
+		payload := fmt.Sprintf(`{"version":10,"id":"request_options","type":"capture-options","av1":%t}`, optIn)
+		value, err := session.Handle(t.Context(), []byte(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := json.Marshal(value)
+		if err != nil || bytes.Contains(data, []byte(`"hardwareAV1"`)) != optIn {
+			t.Fatalf("capture inventory opt-in=%v response=%s error=%v", optIn, data, err)
+		}
 	}
 }
 
