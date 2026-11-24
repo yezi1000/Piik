@@ -21,6 +21,11 @@ phases, including NAT and Auto codec behavior.
 
 ## Device Evidence Boundary
 
+- Optional AV1 has local RTX 5090 D/Windows and Chrome 158 evidence, including
+  Native capture, direct playback, embedded SFU and lifecycle recovery. The
+  [game comparison](./research/native-client-media.md#low-bitrate-game-capture-2026-11-25)
+  owns quality measurements. Other GPU vendors, sustained game/GPU contention,
+  AV1 relay derivation and SVC remain outside this evidence.
 - macOS/Linux builds and bounded native checks are distinct from physical
   capture and input. Physical platform coverage remains limited.
 - Android's system-browser App passed emulator screen/camera sharing

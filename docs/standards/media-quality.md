@@ -251,13 +251,14 @@ claims that every Browser, game, or network already meets them.
 
 ## Codec Decision
 
-The pre-share Browser selector is `VP8 | Auto | H264`, defaults to Auto, and is
+The pre-share Browser selector is `VP8 | Auto | H264`, with optional `AV1` when
+the Server advertises support. It defaults to Auto and is
 locked while sharing. It is local UI state and is not persisted or carried as a
 room quality setting.
 
 Auto uses one bounded actual-sender probe rather than a capability or device
 allowlist. A proved sender prefers H.264 with VP8 fallback; unsupported, failed,
-or inconclusive probes use VP8. Manual VP8 or H264 strictly selects that codec.
+or inconclusive probes use VP8. Manual VP8, H264 or AV1 strictly selects that codec.
 The probe deadline covers setup, negotiation and statistics; cancellation retires
 its resources even when a Browser operation remains pending. The result stays
 fixed for the current share and is reconsidered for a new share.
@@ -273,8 +274,20 @@ The Browser chooses the concrete encoder implementation. A reported H.264 codec
 does not by itself prove hardware acceleration, and Web content cannot select a
 specific MFT, NVENC, AMF, or QSV implementation.
 
-Windows native capture uses the same VP8/Auto/H264 controls. H264 selects the
-hardware path and VP8 the bundled libvpx encoder. Before the first Native Auto
+AV1 is an explicit low-bitrate option, not part of Auto's probe or a codec
+switch during a share. It uses Main profile, 8-bit 4:2:0 and requires compatible
+Viewer decoders. Browser AV1 uses ordinary WebRTC senders and one full-size SFU
+encoding; it does not enter the H264/VP8 shared encoder pool or claim SVC.
+Windows Native AV1 reuses Media Foundation hardware discovery, NV12 surfaces,
+the existing WebRTC encoder adapter and bounded independent output groups.
+It requires an actual AV1 encoder and never silently changes codec on failure.
+Other Native capture platforms retain their existing codecs. Native receivers
+can forward AV1 unchanged; AV1 decode/re-encode derivation at a relay is not
+available. Optional capability exchange keeps new commands and codec metadata
+away from legacy strict readers.
+
+Windows native capture uses the same controls. H264 selects the hardware path
+and VP8 the bundled libvpx encoder. Before the first Native Auto
 capture, the selecting page requests VP8 if Native advertises VP8 and its Browser
 receiver does not advertise H264. Manual selection and an active source's actual
 codec stay unchanged.
@@ -387,8 +400,8 @@ Piik does not impose a room-wide minimum. The Host's one Browser SFU
 publication uses the share-generation codec and selected ceilings. Its ordinary
 simulcast outputs follow pinned LiveKit screen-share construction: original and
 half size at the same frame rate, with a quarter-bitrate lower ceiling and its
-150 kbps floor. Tiny sources use one output. There is no backup codec or third
-product preset. Browser WebRTC budgets the aggregate publication.
+150 kbps floor. Tiny sources and Browser AV1 use one output. There is no backup
+codec or third product preset. Browser WebRTC budgets the aggregate publication.
 
 The embedded SFU forwards an existing suitable encoding to each subscriber.
 LiveKit media components own its per-subscriber bandwidth estimation, allocation,
