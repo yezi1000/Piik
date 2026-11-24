@@ -2250,10 +2250,14 @@ void RunVideoCapture(ProductArguments arguments) {
       if (content_size.Width <= 0 || content_size.Height <= 0) continue;
       if (window_target) {
         const auto window = reinterpret_cast<HWND>(static_cast<UINT_PTR>(arguments.source_id));
-        RECT client{};
-        if (GetClientRect(window, &client) && piik::capture::SuspendedWindowFrame(
+        WINDOWPLACEMENT placement{};
+        placement.length = sizeof(placement);
+        // Current client bounds can still describe the title bar during restore.
+        // The retained normal placement identifies this suspended transition.
+        if (GetWindowPlacement(window, &placement) && piik::capture::SuspendedWindowFrame(
                 {content_size.Width, content_size.Height},
-                {client.right - client.left, client.bottom - client.top},
+                {placement.rcNormalPosition.right - placement.rcNormalPosition.left,
+                 placement.rcNormalPosition.bottom - placement.rcNormalPosition.top},
                 GetSystemMetricsForDpi(SM_CYCAPTION, GetDpiForWindow(window)))) {
           latest.Close();
           continue;

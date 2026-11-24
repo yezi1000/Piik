@@ -13,9 +13,9 @@ namespace piik::capture {
 // WGC can deliver a minimized title bar after restoration, including to a new
 // capture generation that never observed IsIconic. Ordinary frame geometry
 // still belongs to WGC; only the absent client picture is suspended here.
-inline bool SuspendedWindowFrame(SIZE content, SIZE client, LONG caption_height) {
+inline bool SuspendedWindowFrame(SIZE content, SIZE restored, LONG caption_height) {
   return caption_height > 0 && content.cy <= caption_height &&
-      content.cx < client.cx && client.cy > caption_height;
+      content.cx < restored.cx && restored.cy > caption_height;
 }
 
 inline SIZE DisplayedFrameSize(SIZE captured, SIZE desktop, SIZE target,
