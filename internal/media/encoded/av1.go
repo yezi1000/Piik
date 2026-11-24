@@ -10,8 +10,8 @@ import (
 // AV1Sequence is the decoder configuration carried by a complete temporal unit.
 // OBU retains the size field so a recovery unit can carry its own configuration.
 type AV1Sequence struct {
-	Width, Height uint32
-	OBU           []byte
+	MaxWidth, MaxHeight uint32
+	OBU                 []byte
 }
 
 // InspectAV1 admits the single-layer, 8-bit Main profile used by native capture.
@@ -53,10 +53,10 @@ func InspectAV1(data []byte) (*AV1Sequence, error) {
 				return nil, errors.New("AV1 capture requires single-layer 8-bit Main 4:2:0")
 			}
 			width, height := uint32(parsed.Width()), uint32(parsed.Height())
-			if sequence != nil && (sequence.Width != width || sequence.Height != height) {
+			if sequence != nil && (sequence.MaxWidth != width || sequence.MaxHeight != height) {
 				return nil, errors.New("AV1 temporal unit changes decoder dimensions")
 			}
-			sequence = &AV1Sequence{Width: width, Height: height, OBU: append([]byte(nil), data[:end]...)}
+			sequence = &AV1Sequence{MaxWidth: width, MaxHeight: height, OBU: append([]byte(nil), data[:end]...)}
 		}
 		data = data[end:]
 	}

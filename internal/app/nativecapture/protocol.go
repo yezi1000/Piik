@@ -3,6 +3,7 @@ package nativecapture
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 	"unicode/utf8"
@@ -170,9 +171,11 @@ func validateFrameData(frame Frame) error {
 		if frame.KeyFrame && sequence == nil {
 			return errors.New("AV1 recovery frame lacks its sequence header")
 		}
-		if sequence != nil && (!ValidCodedVideoSize(uint64(sequence.Width), uint64(sequence.Height)) ||
-			sequence.Width != frame.Width || sequence.Height != frame.Height) {
-			return errors.New("AV1 sequence dimensions do not match its bounded envelope")
+		// AV1 sequence dimensions are maxima, not the current frame size. NVIDIA
+		// MFTs retain a larger sequence canvas and signal smaller frame headers.
+		if sequence != nil && (!ValidCodedVideoSize(uint64(sequence.MaxWidth), uint64(sequence.MaxHeight)) ||
+			frame.Width > sequence.MaxWidth || frame.Height > sequence.MaxHeight) {
+			return fmt.Errorf("AV1 sequence maximum %dx%d cannot contain its bounded envelope %dx%d", sequence.MaxWidth, sequence.MaxHeight, frame.Width, frame.Height)
 		}
 	}
 	if frame.Kind == FrameLayerUnavailable && !utf8.Valid(frame.Data) {

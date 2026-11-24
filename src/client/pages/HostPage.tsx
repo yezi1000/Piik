@@ -1628,6 +1628,7 @@ export function HostPage({
     if (
       !client.health.nativeMedia.video ||
       (!client.health.nativeMedia.hardwareH264 &&
+        !client.health.nativeMedia.hardwareAV1 &&
         !client.health.nativeMedia.softwareVP8)
     ) {
       setNativeSources({ kind: "unsupported" });

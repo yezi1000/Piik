@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func TestAV1EnvelopeRequiresMatchingRecoveryConfiguration(t *testing.T) {
+func TestAV1EnvelopeRequiresBoundedRecoveryConfiguration(t *testing.T) {
 	// Solid-blue NVENC output, generated independently of user recordings.
 	data, err := hex.DecodeString("12000a0b0000000443fdfe010cc02032251001220108208201400040080120182008555a6e825d3d0071869b9cba2dc5719896377aa8")
 	if err != nil {
@@ -27,8 +27,13 @@ func TestAV1EnvelopeRequiresMatchingRecoveryConfiguration(t *testing.T) {
 	if err != nil || read.Kind.VideoCodec() != "av1" || !bytes.Equal(read.Data, data) {
 		t.Fatalf("AV1 frame = %+v, %v", read, err)
 	}
+	// A sequence can retain a larger maximum canvas across smaller frame sizes.
+	frame.Width, frame.Height = 128, 128
+	if err := writeFrame(&output, frame); err != nil {
+		t.Fatal("valid smaller AV1 envelope was rejected", err)
+	}
 	for _, invalid := range []Frame{
-		{Kind: FrameAV1, Width: 128, Height: 128, KeyFrame: true, Duration: time.Second / 30, Data: data},
+		{Kind: FrameAV1, Width: 258, Height: 256, KeyFrame: true, Duration: time.Second / 30, Data: data},
 		{Kind: FrameAV1, Width: 256, Height: 256, KeyFrame: true, Duration: time.Second / 30, Data: []byte{0x12, 0}},
 	} {
 		var rejected bytes.Buffer

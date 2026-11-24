@@ -231,6 +231,7 @@ async function selectNativeSource(
     `([...document.querySelectorAll(${JSON.stringify(selector)})].find(${predicate}))?.click()`,
     Date.now() + 5_000,
   );
+  await clickHostControl(cdp, page, `document.querySelector('.lr-source-picker-footer button')`);
 }
 
 async function clickHostControl(

@@ -2248,6 +2248,17 @@ void RunVideoCapture(ProductArguments arguments) {
       if (!presentation_timestamp) continue;
       auto content_size = latest.ContentSize();
       if (content_size.Width <= 0 || content_size.Height <= 0) continue;
+      if (window_target) {
+        const auto window = reinterpret_cast<HWND>(static_cast<UINT_PTR>(arguments.source_id));
+        RECT client{};
+        if (GetClientRect(window, &client) && piik::capture::SuspendedWindowFrame(
+                {content_size.Width, content_size.Height},
+                {client.right - client.left, client.bottom - client.top},
+                GetSystemMetricsForDpi(SM_CYCAPTION, GetDpiForWindow(window)))) {
+          latest.Close();
+          continue;
+        }
+      }
       // ContentSize owns this rendered frame's geometry. Item/window bounds can
       // differ on Windows 10; comparing them would discard every valid frame.
       const auto color = display_color.Resolve();

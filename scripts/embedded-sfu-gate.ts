@@ -97,7 +97,8 @@ async function main(): Promise<void> {
   const profile = await mkdtemp(join(tmpdir(), "piik-client-media-"));
   const sourceProfile = nativeArm ? await mkdtemp(join(tmpdir(), "piik-client-media-")) : null;
   const [sourcePort, sourceDebugPort] = nativeArm ? [await reservePort(), await reservePort()] : [0, 0];
-  const result = { passed: false, arm: `${nativeArm ? "native" : displayArm ? "display" : "browser"}-${codec}-simulcast${twoRooms ? "-two-rooms" : ""}`, stage: "start",
+  const expectSimulcast = nativeArm || codec !== "av1";
+  const result = { passed: false, arm: `${nativeArm ? "native" : displayArm ? "display" : "browser"}-${codec}-${expectSimulcast ? "simulcast" : "single"}${twoRooms ? "-two-rooms" : ""}`, stage: "start",
     sfuOnly, captureSize, stereoSeparationDb: null as number[] | null,
     startedAt: new Date().toISOString(), finishedAt: "", processes: [] as Array<{ role: string; pid: number | null }>,
     high: null as { frames: number; width: number; height: number } | null,
@@ -421,7 +422,7 @@ async function main(): Promise<void> {
       Object.values(cleanup).every(Boolean) && (!sourceCleanup || Object.values(sourceCleanup).every(Boolean));
   }
   result.finishedAt = new Date().toISOString();
-  result.passed = !result.error && result.host?.published === true && result.host.simulcast &&
+  result.passed = !result.error && result.host?.published === true && result.host.simulcast === expectSimulcast &&
     result.viewer?.decoded === true && result.viewer.committed &&
     (sfuOnly ? result.viewer.peerFailures === 0 : result.viewer.peerFailures > 0) &&
     (nativeArm || result.stereoSeparationDb?.every(db => db > 20) === true) &&

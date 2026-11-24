@@ -14,7 +14,7 @@ func TestInspectAV1(t *testing.T) {
 		t.Fatal(err)
 	}
 	sequence, err := InspectAV1(frame)
-	if err != nil || sequence == nil || sequence.Width != 256 || sequence.Height != 256 {
+	if err != nil || sequence == nil || sequence.MaxWidth != 256 || sequence.MaxHeight != 256 {
 		t.Fatalf("sequence = %+v, %v", sequence, err)
 	}
 	// A delta temporal unit may omit configuration; an absent header is not
