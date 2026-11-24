@@ -103,6 +103,7 @@ function fixture(launchedByClient = true, nativeConnected = true) {
     ordinaryRelayCapacityRef: ref(2), requestedRelayCapacityRef: ref<number | null>(null), hostRelayAvailableRef: ref(false),
     setHostRelaySupported: vi.fn(), setHostRelayPending: vi.fn(), setHostRelayCapacity: vi.fn(),
     supportsH264Receive: vi.fn(() => true),
+    supportsVideoReceive: vi.fn((codec: string) => codec !== "h264" || state.supportsH264Receive()),
     sourcePickerReturnRef: ref<{ id: string; restore: boolean } | null>(null),
     nativeSourceRequestRef: ref<object | null>(null), nativeSourcePathRef: ref<unknown>(null),
     setNativeSources: vi.fn(), setShowCaptureBorder: vi.fn(), defaultNativeCapturePath: () => ({ adapterIndex: 0, encoderIndex: 0 }),

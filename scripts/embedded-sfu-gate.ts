@@ -75,7 +75,7 @@ async function main(): Promise<void> {
   const twoRooms = process.env.PIIK_EMBEDDED_SFU_TWO_ROOMS === "true";
   if (twoRooms && !nativeArm) throw new Error("Two-room arm requires Native publication");
   const codec = process.env.PIIK_EMBEDDED_SFU_CODEC?.trim() || "vp8";
-  if (codec !== "vp8" && codec !== "h264") throw new Error("SFU gate codec must be vp8 or h264");
+  if (codec !== "vp8" && codec !== "h264" && codec !== "av1") throw new Error("SFU gate codec must be vp8, h264, or av1");
   const captureBinary = process.env.PIIK_CAPTURE_PROCESS?.trim();
   if (nativeArm && (process.platform !== "win32" || !captureBinary)) {
     throw new Error("Native arm requires Windows and PIIK_CAPTURE_PROCESS");

@@ -194,7 +194,7 @@ class HardwareEncoder final : public webrtc::VideoEncoder {
                   Failure& failure)
       : env_(env), kind_(kind), ceiling_(ceiling), create_(std::move(create)),
         initial_(std::move(initial)), failure_(failure) {
-    Check(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "adaptive-h264-apartment");
+    Check(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "adaptive-hardware-apartment");
   }
   ~HardwareEncoder() override {
     initial_.reset();
@@ -212,7 +212,7 @@ class HardwareEncoder final : public webrtc::VideoEncoder {
           config->maxFramerate > ceiling_.frame_rate || config->startBitrate == 0 ||
           config->numberOfSimulcastStreams > 1 ||
           (kind_ == OutputKind::h264 && config->H264().numberOfTemporalLayers > 1)) {
-        Fail("adaptive-h264-config", "WebRTC requested an unsupported H264 configuration");
+        Fail("adaptive-hardware-config", "WebRTC requested an unsupported hardware codec configuration");
       }
       profile_ = ceiling_;
       profile_.width = config->width;
@@ -228,7 +228,7 @@ class HardwareEncoder final : public webrtc::VideoEncoder {
         encoder_ = create_(profile_);
       }
       if (!encoder_ || encoder_->kind != kind_)
-        Fail("adaptive-h264-create", "The native H264 encoder is unavailable");
+        Fail("adaptive-hardware-create", "The native hardware encoder is unavailable");
       applied_bitrate_ = profile_.bit_rate;
       return WEBRTC_VIDEO_CODEC_OK;
     } catch (...) {
@@ -261,7 +261,7 @@ class HardwareEncoder final : public webrtc::VideoEncoder {
       const UINT32 bitrate = rates.bitrate.get_sum_bps();
       if (bitrate != rates.bitrate.GetBitrate(0, 0) ||
           !std::isfinite(rates.framerate_fps))
-        Fail("adaptive-h264-rates", "WebRTC supplied unsupported H264 rates");
+        Fail("adaptive-hardware-rates", "WebRTC supplied unsupported hardware encoder rates");
       if (bitrate == 0) {
         paused_ = true;
         return;
@@ -271,7 +271,7 @@ class HardwareEncoder final : public webrtc::VideoEncoder {
       const double adjusted = static_cast<double>(bitrate) * profile_.frame_rate / fps;
       if (!std::isfinite(adjusted) || adjusted < 1 ||
           adjusted > std::numeric_limits<UINT32>::max())
-        Fail("adaptive-h264-rates", "H264 rate compensation overflowed");
+        Fail("adaptive-hardware-rates", "Hardware rate compensation overflowed");
       const auto next = static_cast<UINT32>(adjusted);
       if (next != applied_bitrate_) encoder_->SetBitrate(next);
       applied_bitrate_ = next;
@@ -287,7 +287,7 @@ class HardwareEncoder final : public webrtc::VideoEncoder {
     try {
       failure_.Rethrow();
       if (!encoder_ || !callback_)
-        Fail("adaptive-h264-encode", "The H264 encoder is not initialized");
+        Fail("adaptive-hardware-encode", "The hardware encoder is not initialized");
       key_frame_pending_ = key_frame_pending_ ||
           (requested && std::find(requested->begin(), requested->end(),
               webrtc::VideoFrameType::kVideoFrameKey) != requested->end());
@@ -299,7 +299,7 @@ class HardwareEncoder final : public webrtc::VideoEncoder {
       const auto* native = dynamic_cast<NativeVideoFrameBuffer*>(frame.video_frame_buffer().get());
       if (!native || frame.width() != static_cast<int>(profile_.width) ||
           frame.height() != static_cast<int>(profile_.height))
-        Fail("adaptive-h264-input", "H264 requires the selected native NV12 surface");
+        Fail("adaptive-hardware-input", "Hardware encoding requires the selected native NV12 surface");
       const auto began = env_.clock().TimeInMilliseconds();
       const auto access_unit = encoder_->Encode(native->texture(), native->timestamp100ns(),
                                                 key_frame_pending_, native->deadline());
@@ -332,7 +332,7 @@ class HardwareEncoder final : public webrtc::VideoEncoder {
       }
       info.scalability_mode = webrtc::ScalabilityMode::kL1T1;
       if (callback_->OnEncodedImage(image, &info).error != webrtc::EncodedImageCallback::Result::OK)
-        Fail("adaptive-h264-callback", "WebRTC rejected the encoded H264 frame");
+        Fail("adaptive-hardware-callback", "WebRTC rejected the hardware encoded frame");
       return WEBRTC_VIDEO_CODEC_OK;
     } catch (...) {
       failure_.Capture();
