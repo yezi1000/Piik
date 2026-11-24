@@ -15,6 +15,7 @@
 #include <wrl/client.h>
 
 #include "capture_error.h"
+#include "capture_output.h"
 #include "mft_event_reader.h"
 
 #include <chrono>
@@ -144,7 +145,8 @@ std::vector<Adapter> EnumerateAdapters();
 const Adapter& SelectAdapter(const std::vector<Adapter>& adapters, UINT index);
 DeviceContext CreateDevice(const Adapter& adapter);
 ActivationList EnumerateHardwareEncoders(const Adapter& adapter,
-                                         bool require_candidate = true);
+                                         bool require_candidate = true,
+                                         OutputKind kind = OutputKind::h264);
 SelectedTransform ActivateTransform(const ActivationList& list, UINT index,
                                     IMFDXGIDeviceManager* manager);
 std::wstring GetOptionalString(IMFAttributes* attributes, const GUID& key);
@@ -157,11 +159,13 @@ void SetU32(ICodecAPI* codec, const GUID& key, UINT32 expected,
 void ConfigureCodec(ICodecAPI* codec,
                     const VideoProfile& profile = kDefaultVideoProfile);
 ComPtr<IMFMediaType> CreateOutputType(
-    const VideoProfile& profile = kDefaultVideoProfile);
+    const VideoProfile& profile = kDefaultVideoProfile,
+    OutputKind kind = OutputKind::h264);
 ComPtr<IMFMediaType> CreateInputType(
     const VideoProfile& profile = kDefaultVideoProfile);
 void ValidateMediaTypes(IMFTransform* transform,
-                        const VideoProfile& profile = kDefaultVideoProfile);
+                        const VideoProfile& profile = kDefaultVideoProfile,
+                        OutputKind kind = OutputKind::h264);
 void ValidateCodecReadback(ICodecAPI* codec,
                            const VideoProfile& profile = kDefaultVideoProfile);
 void ForceKeyFrame(ICodecAPI* codec);
@@ -204,7 +208,8 @@ class VideoEncoder {
 class LiveEncoder final : public VideoEncoder {
  public:
   explicit LiveEncoder(SelectedTransform selected,
-                       VideoProfile profile = kDefaultVideoProfile);
+                       VideoProfile profile = kDefaultVideoProfile,
+                       OutputKind kind = OutputKind::h264);
   ~LiveEncoder() override;
   LiveEncoder(const LiveEncoder&) = delete;
   LiveEncoder& operator=(const LiveEncoder&) = delete;
@@ -225,6 +230,7 @@ class LiveEncoder final : public VideoEncoder {
   UINT32 input_requests_ = 0;
   std::optional<std::string> profile_level_id_;
   bool started_ = false;
+  bool has_output_ = false;
 };
 
 }  // namespace piik::capture::windows

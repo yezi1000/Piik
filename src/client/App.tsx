@@ -402,6 +402,7 @@ function SiteAccessGate({
     }
     return (
       <HostPage
+        av1Available={capabilities?.av1 === true}
         roomInteractionsAvailable={capabilities?.roomInteractions === true}
         roomReactionIds={capabilities?.roomReactionIds}
         hostRoomSessionAvailable={capabilities?.hostRoomSession === true}

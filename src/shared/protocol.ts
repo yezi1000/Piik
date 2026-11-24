@@ -230,6 +230,7 @@ export const DEFAULT_ROUTE_POLICY = {
 } as const satisfies RoutePolicy;
 
 export const runtimeCapabilitiesSchema = z.object({
+  av1: z.boolean().optional(),
   sfu: z.boolean().default(false),
   sfuOnly: z.boolean().optional(),
   natPrediction: z.boolean().default(false),
@@ -416,7 +417,7 @@ export const signalPayloadSchema = z.discriminatedUnion("kind", [
 export type SignalPayload = z.infer<typeof signalPayloadSchema>;
 
 export const sfuMediaSchema = z.object({
-  codec: z.enum(["h264", "vp8"]),
+  codec: z.enum(["h264", "vp8", "av1"]),
   layers: z.array(z.object({
     rid: z.string().max(16),
     width: positiveUint32Schema,

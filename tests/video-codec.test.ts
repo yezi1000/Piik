@@ -1,5 +1,31 @@
 import { expect, it, vi } from "vitest";
 import { normalizeVideoOfferSdp, requireReceivingVideo, supportsH264Receive, VideoReceiveRejectedError } from "../src/client/webrtc/video-codec";
+import { applyVideoCodecPreference, manualVideoCodecPreference, supportsVideoReceive } from "../src/client/webrtc/video-codec";
+
+it("selects AV1 Main with repair and keeps manual AV1 strict", () => {
+  const main = { mimeType: "video/AV1", clockRate: 90_000, sdpFmtpLine: "profile=0;tier=0" };
+  const high = { ...main, sdpFmtpLine: "profile=1;tier=0" };
+  const vp8 = { mimeType: "video/VP8", clockRate: 90_000 };
+  const rtx = { mimeType: "video/rtx", clockRate: 90_000 };
+  const codecs = [vp8, high, main, rtx];
+  const setCodecPreferences = vi.fn();
+  vi.stubGlobal("RTCRtpSender", { getCapabilities: () => ({ codecs }) });
+  vi.stubGlobal("RTCRtpReceiver", { getCapabilities: () => ({ codecs: [main] }) });
+  try {
+    expect(applyVideoCodecPreference({ setCodecPreferences } as unknown as RTCRtpTransceiver,
+      manualVideoCodecPreference("av1"))).toBe(true);
+    expect(setCodecPreferences).toHaveBeenCalledWith([main, rtx]);
+    expect(supportsVideoReceive("av1")).toBe(true);
+    codecs.splice(0, codecs.length, vp8, high, rtx);
+    expect(applyVideoCodecPreference({ setCodecPreferences } as unknown as RTCRtpTransceiver,
+      manualVideoCodecPreference("av1"))).toBe(false);
+    expect(setCodecPreferences).toHaveBeenCalledTimes(1);
+    vi.stubGlobal("RTCRtpReceiver", { getCapabilities: () => ({ codecs: [high] }) });
+    expect(supportsVideoReceive("av1")).toBe(false);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
 
 it("checks H264 receive capability independently of sender support", () => {
   const h264 = { mimeType: "video/H264", clockRate: 90_000, sdpFmtpLine: "packetization-mode=1" };

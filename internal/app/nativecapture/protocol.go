@@ -73,7 +73,21 @@ const (
 	FrameBegin            FrameKind = 5
 	FrameLayerUnavailable FrameKind = 6
 	FrameControl          FrameKind = 7
+	FrameAV1              FrameKind = 8
 )
+
+func (kind FrameKind) VideoCodec() string {
+	switch kind {
+	case FrameH264:
+		return "h264"
+	case FrameVP8:
+		return "vp8"
+	case FrameAV1:
+		return "av1"
+	default:
+		return ""
+	}
+}
 
 type Frame struct {
 	Kind FrameKind
@@ -116,7 +130,7 @@ func parseFrameHeader(header []byte) (Frame, uint32, error) {
 		maximum = maxControlBytes
 	}
 	if string(header[:4]) != "SMED" || header[4] != 2 ||
-		kind < FramePCM || kind > FrameControl || size > maximum ||
+		kind < FramePCM || kind > FrameAV1 || size > maximum ||
 		(kind == FrameBegin) != (size == 0) {
 		return Frame{}, 0, errors.New("native capture frame header is invalid")
 	}
@@ -125,7 +139,7 @@ func parseFrameHeader(header []byte) (Frame, uint32, error) {
 	width := uint32(binary.BigEndian.Uint16(header[24:26]))
 	height := uint32(binary.BigEndian.Uint16(header[26:28]))
 	layer := int(header[7])
-	isVideo := kind == FrameH264 || kind == FrameVP8
+	isVideo := kind.VideoCodec() != ""
 	isTimed := isVideo || kind == FramePCM || kind == FrameBegin
 	const maxTime100ns = uint64(1<<63-1) / 100
 	if timestamp100ns > maxTime100ns || duration100ns > maxTime100ns ||
@@ -148,6 +162,19 @@ func parseFrameHeader(header []byte) (Frame, uint32, error) {
 }
 
 func validateFrameData(frame Frame) error {
+	if frame.Kind == FrameAV1 {
+		sequence, err := encoded.InspectAV1(frame.Data)
+		if err != nil {
+			return err
+		}
+		if frame.KeyFrame && sequence == nil {
+			return errors.New("AV1 recovery frame lacks its sequence header")
+		}
+		if sequence != nil && (!ValidCodedVideoSize(uint64(sequence.Width), uint64(sequence.Height)) ||
+			sequence.Width != frame.Width || sequence.Height != frame.Height) {
+			return errors.New("AV1 sequence dimensions do not match its bounded envelope")
+		}
+	}
 	if frame.Kind == FrameLayerUnavailable && !utf8.Valid(frame.Data) {
 		return errors.New("native unavailable output diagnostic is invalid")
 	}

@@ -21,6 +21,7 @@ const videoClockRate = 90_000
 const videoPacketMTU = 1200
 const h264PayloadType = 102
 const vp8PayloadType = 96
+const av1PayloadType = 104
 const allRecoveryLayers = ^uint32(0)
 
 var ErrSourceCapacity = errors.New("native media source capacity is exhausted")

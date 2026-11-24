@@ -60,6 +60,8 @@ export const nativeHealthSchema = nativeDiscoveryIdentitySchema.extend({
       // API availability, not Windows approval or observed border visibility.
       captureBorderControl: z.boolean().default(false),
       hardwareH264: z.boolean().default(false),
+      av1: z.boolean().optional(),
+      hardwareAV1: z.boolean().optional(),
       softwareVP8: z.boolean().default(false),
     })
     .prefault({}),
@@ -124,6 +126,7 @@ const nativeAdapterSchema = z
     name: z.string().min(1).max(512),
     identity: z.string().min(1).max(512),
     hardwareH264: z.array(nativeEncoderSchema).max(64),
+    hardwareAV1: z.array(nativeEncoderSchema).max(64).optional(),
   })
   .strict();
 export type NativeAdapter = z.infer<typeof nativeAdapterSchema>;
@@ -144,7 +147,7 @@ export const punchCompleteResponseSchema = z.object({
   ...responseBase, type: z.literal("punch-complete"), connected: z.boolean(),
 }).strict();
 
-const nativeVideoCodecSchema = z.enum(["h264", "vp8"]);
+const nativeVideoCodecSchema = z.enum(["h264", "vp8", "av1"]);
 export type NativeVideoCodec = z.infer<typeof nativeVideoCodecSchema>;
 
 export const readyResponseSchema = z

@@ -730,6 +730,8 @@ func discoverNativeMedia(ctx context.Context, configuredPath string) nativeRunti
 			CaptureFailureDetails:        true,
 			SystemAudio:                  summary.SystemAudio,
 			HardwareH264:                 summary.HardwareH264,
+			AV1:                          true,
+			HardwareAV1:                  summary.HardwareAV1,
 			SoftwareVP8:                  summary.SoftwareVP8,
 		},
 	}

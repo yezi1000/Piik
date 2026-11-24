@@ -26,7 +26,7 @@ func (value *SfuMedia) UnmarshalJSON(data []byte) error {
 	if err := present.require("codec", "layers", "audio", "audioBitrate"); err != nil {
 		return err
 	}
-	if !enumOf(value.Codec, "h264", "vp8") || len(value.Layers) < 1 || len(value.Layers) > 3 ||
+	if !enumOf(value.Codec, "h264", "vp8", "av1") || len(value.Layers) < 1 || len(value.Layers) > 3 ||
 		!inRangeInt(value.AudioBitrate, 0, MaxAudioBitrate) || value.Audio && value.AudioBitrate == 0 {
 		return errors.New("invalid SFU media")
 	}

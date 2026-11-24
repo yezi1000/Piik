@@ -724,6 +724,7 @@ export const zh = {
   "host.advanced.codec.autoHint": "自动选择",
   "host.advanced.codec.vp8Hint": "兼容优先",
   "host.advanced.codec.h264Hint": "硬件优先",
+  "host.advanced.codec.av1Hint": "低码率下保留更多细节；需要观众设备支持",
 
   "host.details": "连接详情",
   "host.details.show": "显示连接详情",

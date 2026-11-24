@@ -129,7 +129,7 @@ func (media *Media) HasPublication(fence ResourceFence, connectionID string) boo
 }
 
 func validPublicationMedia(metadata PublicationMedia) bool {
-	if (metadata.Codec != "h264" && metadata.Codec != "vp8") ||
+	if (metadata.Codec != "h264" && metadata.Codec != "vp8" && metadata.Codec != "av1") ||
 		len(metadata.Formats) < 1 || len(metadata.Formats) > 3 ||
 		len(metadata.RIDs) != len(metadata.Formats) ||
 		(metadata.Audio && metadata.AudioBitrate == 0) {

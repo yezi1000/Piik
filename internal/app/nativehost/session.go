@@ -1166,9 +1166,9 @@ func (session *Session) runVideo() error {
 				if controlErr != nil && session.currentStream() == current {
 					return fail(controlErr)
 				}
-			case nativecapture.FrameH264, nativecapture.FrameVP8:
+			case nativecapture.FrameH264, nativecapture.FrameVP8, nativecapture.FrameAV1:
 				if session.source == nil ||
-					(frame.Kind == nativecapture.FrameH264) != (session.source.Codec() == "h264") {
+					frame.Kind.VideoCodec() != session.source.Codec() {
 					return fail(errors.New("native video frame does not match its source codec"))
 				}
 				if formatErr := session.source.SetFormat(frame.Layer, frame.Width, frame.Height); formatErr != nil {
@@ -1536,8 +1536,8 @@ func decodeCaptureState(payload []byte) (CaptureState, error) {
 	var state CaptureState
 	if err := decoder.Decode(&state); err != nil || decoder.Decode(&struct{}{}) != io.EOF ||
 		(state.State != "starting" && state.State != "active") ||
-		(state.Codec != "h264" && state.Codec != "vp8") ||
-		state.HardwareOnly != (state.Codec == "h264") || len(state.Outputs) < 1 || len(state.Outputs) > 6 {
+		(state.Codec != "h264" && state.Codec != "vp8" && state.Codec != "av1") ||
+		state.HardwareOnly != (state.Codec != "vp8") || len(state.Outputs) < 1 || len(state.Outputs) > 6 {
 		return CaptureState{}, errors.New("native capture state is invalid")
 	}
 	for _, output := range state.Outputs {
@@ -1546,7 +1546,7 @@ func decodeCaptureState(payload []byte) (CaptureState, error) {
 		}
 	}
 	if state.State == "starting" &&
-		(state.AdapterIndex == nil || (state.Codec == "h264" && state.EncoderIndex == nil) ||
+		(state.AdapterIndex == nil || (state.Codec != "vp8" && state.EncoderIndex == nil) ||
 			state.AdapterName == "" || state.AdapterIdentity == "" ||
 			state.EncoderName == "" || state.EncoderIdentity == "") {
 		return CaptureState{}, errors.New("native capture starting state is incomplete")
@@ -1555,7 +1555,7 @@ func decodeCaptureState(payload []byte) (CaptureState, error) {
 	// Output profiles are ceilings; aspect-preserving capture may be smaller.
 	if state.State == "active" &&
 		((state.Codec == "h264" && !nativecapture.SupportedH264ProfileLevelID(state.ProfileLevelID)) ||
-			(state.Codec == "vp8" && state.ProfileLevelID != "") ||
+			(state.Codec != "h264" && state.ProfileLevelID != "") ||
 			!nativecapture.ValidVideoSize(state.Width, state.Height) ||
 			state.Width > original.Width || state.Height > original.Height ||
 			state.FPS != original.Framerate ||

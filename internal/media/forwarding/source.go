@@ -76,7 +76,8 @@ func (source *Source) RateControlled(layer int32) bool {
 func NewSource(options SourceOptions) (*Source, error) {
 	audio := strings.EqualFold(options.Codec.MimeType, webrtc.MimeTypeOpus) && options.Codec.ClockRate == 48_000
 	video := options.Codec.ClockRate == 90_000 && (strings.EqualFold(options.Codec.MimeType, webrtc.MimeTypeH264) ||
-		strings.EqualFold(options.Codec.MimeType, webrtc.MimeTypeVP8))
+		strings.EqualFold(options.Codec.MimeType, webrtc.MimeTypeVP8) ||
+		strings.EqualFold(options.Codec.MimeType, webrtc.MimeTypeAV1))
 	if options.ID == "" || options.StreamID == "" || (!audio && !video) {
 		return nil, errors.New("forwarded source is invalid")
 	}

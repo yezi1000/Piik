@@ -95,7 +95,7 @@ func TestInputChannelUsesPlaybackAndRelay(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = session.Close() })
-	result, err := session.AcceptOffer("upstream", offer, nil, false, false)
+	result, err := session.AcceptOffer("upstream", offer, nil, false, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestInputChannelUsesPlaybackAndRelay(t *testing.T) {
 		t.Fatal(err)
 	}
 	offer = localDescription(upstream, offer)
-	result, err = session.AcceptOffer("upstream", offer, nil, true, false)
+	result, err = session.AcceptOffer("upstream", offer, nil, true, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}

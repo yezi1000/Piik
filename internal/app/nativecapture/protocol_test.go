@@ -3,12 +3,40 @@ package nativecapture
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"io"
 	"slices"
 	"testing"
 	"time"
 )
+
+func TestAV1EnvelopeRequiresMatchingRecoveryConfiguration(t *testing.T) {
+	// Solid-blue NVENC output, generated independently of user recordings.
+	data, err := hex.DecodeString("12000a0b0000000443fdfe010cc02032251001220108208201400040080120182008555a6e825d3d0071869b9cba2dc5719896377aa8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	frame := Frame{Kind: FrameAV1, Width: 256, Height: 256, KeyFrame: true,
+		Duration: time.Second / 30, Data: data}
+	var output bytes.Buffer
+	if err := writeFrame(&output, frame); err != nil {
+		t.Fatal(err)
+	}
+	read, err := readFrame(&output)
+	if err != nil || read.Kind.VideoCodec() != "av1" || !bytes.Equal(read.Data, data) {
+		t.Fatalf("AV1 frame = %+v, %v", read, err)
+	}
+	for _, invalid := range []Frame{
+		{Kind: FrameAV1, Width: 128, Height: 128, KeyFrame: true, Duration: time.Second / 30, Data: data},
+		{Kind: FrameAV1, Width: 256, Height: 256, KeyFrame: true, Duration: time.Second / 30, Data: []byte{0x12, 0}},
+	} {
+		var rejected bytes.Buffer
+		if err := writeFrame(&rejected, invalid); err == nil || rejected.Len() != 0 {
+			t.Fatal("invalid AV1 wrote a partial envelope")
+		}
+	}
+}
 
 func TestReadFrameUsesTheBoundedVersionedEnvelope(t *testing.T) {
 	payload := []byte{0, 0, 0, 1, 0x65}

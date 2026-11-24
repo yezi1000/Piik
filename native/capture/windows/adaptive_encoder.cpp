@@ -35,6 +35,15 @@
 namespace piik::capture::windows {
 namespace {
 
+webrtc::VideoCodecType CodecType(OutputKind kind) {
+  switch (kind) {
+    case OutputKind::h264: return webrtc::kVideoCodecH264;
+    case OutputKind::vp8: return webrtc::kVideoCodecVP8;
+    case OutputKind::av1: return webrtc::kVideoCodecAV1;
+    default: Fail("adaptive-codec", "Unsupported video codec");
+  }
+}
+
 // Tune the existing scaler: five-second QP smoothing in both directions,
 // two-second base checks, and fewer required frames for low-cadence recovery.
 // Codec thresholds, congestion control and CPU adaptation stay with WebRTC.
@@ -179,11 +188,11 @@ class NativeVideoFrameBuffer : public webrtc::VideoFrameBuffer {
 
 class HardwareEncoder final : public webrtc::VideoEncoder {
  public:
-  HardwareEncoder(const webrtc::Environment& env, VideoProfile ceiling,
+  HardwareEncoder(const webrtc::Environment& env, OutputKind kind, VideoProfile ceiling,
                   AdaptiveEncoder::Factory create,
                   std::unique_ptr<piik::capture::windows::VideoEncoder> initial,
                   Failure& failure)
-      : env_(env), ceiling_(ceiling), create_(std::move(create)),
+      : env_(env), kind_(kind), ceiling_(ceiling), create_(std::move(create)),
         initial_(std::move(initial)), failure_(failure) {
     Check(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "adaptive-h264-apartment");
   }
@@ -196,12 +205,13 @@ class HardwareEncoder final : public webrtc::VideoEncoder {
   int32_t InitEncode(const webrtc::VideoCodec* config, const Settings&) override {
     Release();
     try {
-      if (!config || config->codecType != webrtc::kVideoCodecH264 ||
+      if (!config || config->codecType != CodecType(kind_) ||
           config->width == 0 || config->height == 0 || (config->width & 1) ||
           (config->height & 1) || config->width > ceiling_.width ||
           config->height > ceiling_.height || config->maxFramerate == 0 ||
           config->maxFramerate > ceiling_.frame_rate || config->startBitrate == 0 ||
-          config->numberOfSimulcastStreams > 1 || config->H264().numberOfTemporalLayers > 1) {
+          config->numberOfSimulcastStreams > 1 ||
+          (kind_ == OutputKind::h264 && config->H264().numberOfTemporalLayers > 1)) {
         Fail("adaptive-h264-config", "WebRTC requested an unsupported H264 configuration");
       }
       profile_ = ceiling_;
@@ -217,13 +227,13 @@ class HardwareEncoder final : public webrtc::VideoEncoder {
         initial_.reset();
         encoder_ = create_(profile_);
       }
-      if (!encoder_ || encoder_->kind != OutputKind::h264)
+      if (!encoder_ || encoder_->kind != kind_)
         Fail("adaptive-h264-create", "The native H264 encoder is unavailable");
       applied_bitrate_ = profile_.bit_rate;
       return WEBRTC_VIDEO_CODEC_OK;
     } catch (...) {
       if (config) {
-        std::osyncstream(std::cerr) << "event=encoder-initialization-failed codec=h264 width="
+        std::osyncstream(std::cerr) << "event=encoder-initialization-failed codec=" << VideoCodecName(kind_) << " width="
             << config->width << " height=" << config->height
             << " fps=" << config->maxFramerate << " bitrate=" << config->startBitrate * 1000 << '\n';
       }
@@ -314,10 +324,12 @@ class HardwareEncoder final : public webrtc::VideoEncoder {
                                              : webrtc::VideoFrameType::kVideoFrameDelta);
       image.SetEncodeTime(began, env_.clock().TimeInMilliseconds());
       webrtc::CodecSpecificInfo info;
-      info.codecType = webrtc::kVideoCodecH264;
-      info.codecSpecific.H264 = {};
-      info.codecSpecific.H264.packetization_mode = webrtc::H264PacketizationMode::NonInterleaved;
-      info.codecSpecific.H264.idr_frame = access_unit.key_frame;
+      info.codecType = CodecType(kind_);
+      if (kind_ == OutputKind::h264) {
+        info.codecSpecific.H264 = {};
+        info.codecSpecific.H264.packetization_mode = webrtc::H264PacketizationMode::NonInterleaved;
+        info.codecSpecific.H264.idr_frame = access_unit.key_frame;
+      }
       info.scalability_mode = webrtc::ScalabilityMode::kL1T1;
       if (callback_->OnEncodedImage(image, &info).error != webrtc::EncodedImageCallback::Result::OK)
         Fail("adaptive-h264-callback", "WebRTC rejected the encoded H264 frame");
@@ -330,13 +342,16 @@ class HardwareEncoder final : public webrtc::VideoEncoder {
 
   EncoderInfo GetEncoderInfo() const override {
     EncoderInfo info;
-    info.implementation_name = "Windows Media Foundation H264";
+    info.implementation_name = kind_ == OutputKind::av1
+        ? "Windows Media Foundation AV1" : "Windows Media Foundation H264";
     info.is_hardware_accelerated = true;
     info.enable_cpu_overuse_detection = true;
     info.has_trusted_rate_controller = false;
-    // VSE parses H264 slice QP; use upstream H264 quality-scaler thresholds.
-    info.is_qp_trusted = true;
-    info.scaling_settings = ScalingSettings(24, 37);
+    if (kind_ == OutputKind::h264) {
+      // VSE parses H264 slice QP; these thresholds do not apply to AV1.
+      info.is_qp_trusted = true;
+      info.scaling_settings = ScalingSettings(24, 37);
+    }
     info.requested_resolution_alignment = 2;
     info.supports_native_handle = true;
     info.supports_simulcast = false;
@@ -346,6 +361,7 @@ class HardwareEncoder final : public webrtc::VideoEncoder {
 
  private:
   const webrtc::Environment env_;
+  const OutputKind kind_;
   const VideoProfile ceiling_;
   AdaptiveEncoder::Factory create_;
   std::unique_ptr<piik::capture::windows::VideoEncoder> initial_, encoder_;
@@ -423,7 +439,7 @@ class AdaptiveEncoder::Impl final : public webrtc::VideoSourceInterface<webrtc::
       encoder_->SetSource(this, Preference(ceiling_.preference));
       encoder_->SetStartBitrate(static_cast<int>(ceiling_.bit_rate));
       webrtc::VideoEncoderConfig config;
-      config.codec_type = kind_ == OutputKind::h264 ? webrtc::kVideoCodecH264 : webrtc::kVideoCodecVP8;
+      config.codec_type = CodecType(kind_);
       config.video_format = format;
       config.content_type = webrtc::VideoEncoderConfig::ContentType::kRealtimeVideo;
       config.number_of_streams = 1;
@@ -526,6 +542,8 @@ class AdaptiveEncoder::Impl final : public webrtc::VideoSourceInterface<webrtc::
 
   std::vector<webrtc::SdpVideoFormat> GetSupportedFormats() const override {
     if (kind_ == OutputKind::vp8) return {webrtc::SdpVideoFormat("VP8")};
+    if (kind_ == OutputKind::av1)
+      return {webrtc::SdpVideoFormat("AV1", {{"profile", "0"}, {"tier", "0"}, {"level-idx", "5"}})};
     return {webrtc::SdpVideoFormat("H264", {{"profile-level-id", kH264ProfileLevelId},
         {"packetization-mode", "1"}, {"level-asymmetry-allowed", "1"}})};
   }
@@ -538,7 +556,7 @@ class AdaptiveEncoder::Impl final : public webrtc::VideoSourceInterface<webrtc::
         if (!encoder) Fail("adaptive-vp8-create", "WebRTC VP8 encoder is unavailable");
         return encoder;
       }
-      return std::make_unique<HardwareEncoder>(env, ceiling_, create_, std::move(initial_), failure_);
+      return std::make_unique<HardwareEncoder>(env, kind_, ceiling_, create_, std::move(initial_), failure_);
     } catch (...) {
       failure_.Capture();
       return nullptr;
@@ -588,7 +606,7 @@ class AdaptiveEncoder::Impl final : public webrtc::VideoSourceInterface<webrtc::
     const auto stats = stats_->GetStats();
     std::osyncstream line(std::cerr);
     line << "event=encoder-stats output=" << output_index_
-         << " codec=" << (kind_ == OutputKind::h264 ? "h264" : "vp8")
+         << " codec=" << VideoCodecName(kind_)
          << " ceilingWidth=" << ceiling_.width << " ceilingHeight=" << ceiling_.height
          << " ceilingFps=" << ceiling_.frame_rate << " ceilingBitrate=" << ceiling_.bit_rate
          << " inputFps=" << stats.input_frame_rate << " encodeFps=" << stats.encode_frame_rate
@@ -655,8 +673,8 @@ class AdaptiveEncoder::Impl final : public webrtc::VideoSourceInterface<webrtc::
 
 AdaptiveEncoder::AdaptiveEncoder(OutputKind kind, VideoProfile ceiling, ID3D11Device* device,
     Factory create, std::unique_ptr<VideoEncoder> initial, int output_index) {
-  if ((kind != OutputKind::vp8 && kind != OutputKind::h264) || !device ||
-      (kind == OutputKind::h264 && !create) ||
+  if ((kind != OutputKind::vp8 && kind != OutputKind::h264 && kind != OutputKind::av1) || !device ||
+      (kind != OutputKind::vp8 && !create) ||
       ceiling.width == 0 || ceiling.height == 0 || (ceiling.width & 1) || (ceiling.height & 1) ||
       static_cast<UINT64>(ceiling.width) * ceiling.height > std::numeric_limits<int>::max() ||
       ceiling.frame_rate == 0 || ceiling.frame_rate > 1'000 || ceiling.bit_rate < 1'000 ||

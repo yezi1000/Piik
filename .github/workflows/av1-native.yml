@@ -1,0 +1,26 @@
+name: AV1 native candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-capture:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Build and check the production capture helper
+        shell: pwsh
+        run: ./native/capture/windows/build.ps1 -OutputDirectory build/av1-native -Check
+      - name: Retain candidate helpers for physical verification
+        uses: actions/upload-artifact@v7
+        with:
+          name: piik-native-av1-${{ github.sha }}
+          path: build/av1-native/*.exe
+          if-no-files-found: error
+          retention-days: 7

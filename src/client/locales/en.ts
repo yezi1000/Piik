@@ -724,6 +724,7 @@ export const en: Record<CopyKey, string> = {
   "host.advanced.codec.autoHint": "Pick automatically",
   "host.advanced.codec.vp8Hint": "Compatibility first",
   "host.advanced.codec.h264Hint": "Hardware first",
+  "host.advanced.codec.av1Hint": "More detail at low bitrates; requires compatible viewers",
 
   "host.details": "Connection details",
   "host.details.show": "Show connection details",
