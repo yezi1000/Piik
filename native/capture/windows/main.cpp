@@ -2248,21 +2248,6 @@ void RunVideoCapture(ProductArguments arguments) {
       if (!presentation_timestamp) continue;
       auto content_size = latest.ContentSize();
       if (content_size.Width <= 0 || content_size.Height <= 0) continue;
-      if (window_target) {
-        const auto window = reinterpret_cast<HWND>(static_cast<UINT_PTR>(arguments.source_id));
-        WINDOWPLACEMENT placement{};
-        placement.length = sizeof(placement);
-        // Current client bounds can still describe the title bar during restore.
-        // The retained normal placement identifies this suspended transition.
-        if (GetWindowPlacement(window, &placement) && piik::capture::SuspendedWindowFrame(
-                {content_size.Width, content_size.Height},
-                {placement.rcNormalPosition.right - placement.rcNormalPosition.left,
-                 placement.rcNormalPosition.bottom - placement.rcNormalPosition.top},
-                GetSystemMetricsForDpi(SM_CYCAPTION, GetDpiForWindow(window)))) {
-          latest.Close();
-          continue;
-        }
-      }
       // ContentSize owns this rendered frame's geometry. Item/window bounds can
       // differ on Windows 10; comparing them would discard every valid frame.
       const auto color = display_color.Resolve();
@@ -2285,6 +2270,32 @@ void RunVideoCapture(ProductArguments arguments) {
           source_description.Width, static_cast<UINT32>(content_size.Width));
       UINT32 content_height = std::min<UINT32>(
           source_description.Height, static_cast<UINT32>(content_size.Height));
+      if (window_target) {
+        const auto window = reinterpret_cast<HWND>(static_cast<UINT_PTR>(arguments.source_id));
+        const auto dpi = GetDpiForWindow(window);
+        const SIZE minimized{GetSystemMetricsForDpi(SM_CXMINIMIZED, dpi),
+                             GetSystemMetricsForDpi(SM_CYMINIMIZED, dpi)};
+        WINDOWPLACEMENT placement{};
+        placement.length = sizeof(placement);
+        // ContentSize can advance before the pool's backing texture. Check the
+        // actual raster sent to the codec, using retained restoration geometry.
+        if (GetWindowPlacement(window, &placement)) {
+          const SIZE restored{placement.rcNormalPosition.right - placement.rcNormalPosition.left,
+                              placement.rcNormalPosition.bottom - placement.rcNormalPosition.top};
+          if (content_height <= static_cast<UINT32>(std::max<LONG>(0, minimized.cy))) {
+            std::cerr << "event=capture-small-window-frame declaredWidth=" << content_size.Width
+                << " declaredHeight=" << content_size.Height << " rasterWidth=" << content_width
+                << " rasterHeight=" << content_height << " restoredWidth=" << restored.cx
+                << " restoredHeight=" << restored.cy << " minimizedWidth=" << minimized.cx
+                << " minimizedHeight=" << minimized.cy << '\n';
+          }
+          if (piik::capture::SuspendedWindowFrame(
+                  {static_cast<LONG>(content_width), static_cast<LONG>(content_height)}, restored, minimized)) {
+            latest.Close();
+            continue;
+          }
+        }
+      }
       auto input = std::make_shared<CaptureInput>();
       input->texture = sdr.Convert(source.Get(), color);
       input->width = content_width;
