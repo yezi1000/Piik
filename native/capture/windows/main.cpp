@@ -2273,7 +2273,7 @@ void RunVideoCapture(ProductArguments arguments) {
       if (window_target) {
         const auto window = reinterpret_cast<HWND>(static_cast<UINT_PTR>(arguments.source_id));
         const auto dpi = GetDpiForWindow(window);
-        const SIZE minimized{GetSystemMetricsForDpi(SM_CXMINIMIZED, dpi),
+        const SIZE minimized_size{GetSystemMetricsForDpi(SM_CXMINIMIZED, dpi),
                              GetSystemMetricsForDpi(SM_CYMINIMIZED, dpi)};
         WINDOWPLACEMENT placement{};
         placement.length = sizeof(placement);
@@ -2282,15 +2282,15 @@ void RunVideoCapture(ProductArguments arguments) {
         if (GetWindowPlacement(window, &placement)) {
           const SIZE restored{placement.rcNormalPosition.right - placement.rcNormalPosition.left,
                               placement.rcNormalPosition.bottom - placement.rcNormalPosition.top};
-          if (content_height <= static_cast<UINT32>(std::max<LONG>(0, minimized.cy))) {
+          if (content_height <= static_cast<UINT32>(std::max<LONG>(0, minimized_size.cy))) {
             std::cerr << "event=capture-small-window-frame declaredWidth=" << content_size.Width
                 << " declaredHeight=" << content_size.Height << " rasterWidth=" << content_width
                 << " rasterHeight=" << content_height << " restoredWidth=" << restored.cx
-                << " restoredHeight=" << restored.cy << " minimizedWidth=" << minimized.cx
-                << " minimizedHeight=" << minimized.cy << '\n';
+                << " restoredHeight=" << restored.cy << " minimizedWidth=" << minimized_size.cx
+                << " minimizedHeight=" << minimized_size.cy << '\n';
           }
           if (piik::capture::SuspendedWindowFrame(
-                  {static_cast<LONG>(content_width), static_cast<LONG>(content_height)}, restored, minimized)) {
+                  {static_cast<LONG>(content_width), static_cast<LONG>(content_height)}, restored, minimized_size)) {
             latest.Close();
             continue;
           }
