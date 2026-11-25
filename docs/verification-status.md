@@ -1,6 +1,6 @@
 # Verification Status
 
-Last updated: 2026-10-26
+Last updated: 2026-11-25
 
 This file summarizes evidence boundaries that materially affect product claims.
 [Status](./status.md) owns candidate and deployment readiness; research owns

@@ -464,7 +464,9 @@ pipeline each, including source restrictions, rate correction and resource
 feedback. Resolution/FPS adaptation keeps the capture and transport identities;
 actual output dimensions update forwarding metadata without resetting sibling
 stream trackers. H264 uses native NV12/MFT and WebRTC's parsed-QP adaptation;
-VP8 uses the library encoder. Windows tunes the stock QP history and sampling
+VP8 uses the library encoder. AV1 uses native NV12/MFT and retains rate, frame
+and CPU feedback without advertising H264's QP-based scaling thresholds.
+Windows tunes the stock QP history and sampling
 for brief interruptions and low-frame-rate recovery; codec thresholds and the
 adaptation controller remain WebRTC-owned. Other platform producers retain their
 current fixed-output implementation pending equivalent physical acceptance.

@@ -45,6 +45,11 @@ contain the frame envelope; they are not an equality check against current
 dimensions. A separate physical run also exposed WGC's delayed minimized
 title-bar frame during profile replacement. The capture owner must suspend
 that absent client picture rather than initialize an encoder for it.
+The failing transition declared 931x1005 content over a still-held 146x21
+texture. Checking only `ContentSize` therefore missed it. The final capture
+check uses the raster after clipping to texture storage, the OS minimized-window
+extent and retained normal placement. It suspended both the small declaration
+and the larger declaration over the small texture during the physical repeat.
 
 Chrome 158 accepted two AV1 send RIDs but encoded only the first, half-size
 RID. Browser AV1 therefore uses one full-size encoding. The corrected local
@@ -61,7 +66,10 @@ The normal Native Host/Viewer page gate subsequently passed with AV1: live
 size/FPS/bitrate updates, pause/resume, minimized profile replacement, window
 resize/fullscreen/minimize/restore, source replacement, source-closure retirement
 and replacement Viewer acquisition. All process, port and profile cleanup checks
-passed. These are local Windows/NVIDIA/Chrome controls, not Internet-loss or
+passed. The final raster check passed complete AV1 and H264 repeats. The Viewer
+is kept visible during source window transitions so Browser occlusion does not
+turn suspended local playback into a capture-failure result.
+These are local Windows/NVIDIA/Chrome controls, not Internet-loss or
 concurrent-game-load measurements.
 
 The existing [AV1 RTP specification](https://aomediacodec.github.io/av1-rtp-spec/)
