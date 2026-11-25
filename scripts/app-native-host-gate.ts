@@ -1312,6 +1312,9 @@ async function main(): Promise<void> {
               windowId, bounds: { windowState: "normal" },
             }, undefined, Date.now() + 5_000);
           }
+          // Fullscreen can occlude playback and suspend Browser decoding. Keep
+          // the observed Viewer visible while WGC captures the source behind it.
+          await cdp.call("Page.bringToFront", {}, viewer.sessionId, Date.now() + 5_000);
           const before = await evaluate<number>(cdp, viewer,
             "document.querySelector('video')?.getVideoPlaybackQuality().totalVideoFrames ?? 0", Date.now() + 5_000);
           await waitForValue((deadline) => evaluate<boolean>(cdp!, viewer,
