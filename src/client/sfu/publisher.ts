@@ -169,8 +169,10 @@ export class SfuPublisher {
         this.audio = this.ownTrack(stream.getAudioTracks()[0]?.clone() ?? null);
         this.setPaused(this.paused);
         const dimensions = senderCaptureTrack(video).getSettings();
+        // Chromium can accept AV1 simulcast SDP while encoding only the first
+        // RID. Keep the original size on one stream; Native outputs are separate.
         this.layerCount =
-          Math.max(dimensions.width ?? 0, dimensions.height ?? 0) >= 480
+          codec !== "av1" && Math.max(dimensions.width ?? 0, dimensions.height ?? 0) >= 480
             ? 2
             : 1;
         const videoTransceiver = peer.pc.addTransceiver(video, {

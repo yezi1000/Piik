@@ -15,7 +15,7 @@ import {
   decodedVideoFrames,
   type StatsAccumulator,
 } from "./stats";
-import { preferScreenAudioStereo } from "./opus-receive-sdp";
+import { createScreenReceiveAnswer } from "./screen-receive-answer";
 import { requireReceivingVideo, VideoReceiveRejectedError } from "./video-codec";
 import { observeDecodedFrameProof } from "../media/decoded-frame-proof";
 import {
@@ -425,7 +425,7 @@ export class ViewerPeer implements ViewerMediaPeer {
       if (!this.isCurrentConnection(connection, connectionId)) {
         return;
       }
-      const answer = preferScreenAudioStereo(await this.waitForOperation(connection, () => connection.createAnswer()));
+      const answer = await this.waitForOperation(connection, () => createScreenReceiveAnswer(connection));
       if (!this.isCurrentConnection(connection, connectionId)) {
         return;
       }

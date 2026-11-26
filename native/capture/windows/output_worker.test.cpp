@@ -371,7 +371,7 @@ void CheckH264ProfileCompatibility() {
   ProductArguments arguments;
   arguments.outputs = {profile};
   AdaptiveAccessUnit output{{0, true, {0, 0, 0, 1, 0x67, 0x42, 0xe0, 0x1f}}, 640, 480, 333'333};
-  WriteVideoActive(writer, arguments, true, output);
+  WriteVideoActive(writer, arguments, OutputKind::h264, output);
   std::array<char, 4096> bytes{};
   DWORD count = 0;
   assert(ReadFile(read, bytes.data(), static_cast<DWORD>(bytes.size()), &count, nullptr));

@@ -312,7 +312,7 @@ export class NativeClient {
   async captureOptions(): Promise<NativeAdapter[]> {
     const response = await this.request(
       "capture-options",
-      {},
+      this.health.nativeMedia.av1 ? { av1: true } : {},
       captureOptionsResponseSchema,
     );
     return response.adapters;
@@ -619,6 +619,7 @@ export class NativeClient {
         shareId,
         connectionId,
         ...(this.health.nativeMedia.receiverReuse ? { reuseReceiver: true } : {}),
+        ...(this.health.nativeMedia.av1 ? { av1: true } : {}),
         edgeCapacity,
         ...(punched ? { punched: true } : {}),
         iceServers: iceConfig.iceServers.map((server) => ({

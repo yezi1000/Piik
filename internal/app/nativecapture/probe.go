@@ -39,6 +39,7 @@ type Adapter struct {
 	Name         string    `json:"name"`
 	Identity     string    `json:"identity"`
 	HardwareH264 []Encoder `json:"hardwareH264"`
+	HardwareAV1  []Encoder `json:"hardwareAV1,omitempty"`
 }
 
 type Capabilities struct {
@@ -64,6 +65,7 @@ type Summary struct {
 	ProcessAudioExclusion bool
 	SystemAudio           bool
 	HardwareH264          bool
+	HardwareAV1           bool
 	SoftwareVP8           bool
 }
 
@@ -80,7 +82,9 @@ func (capabilities Capabilities) Summary() Summary {
 	for _, adapter := range capabilities.Adapters {
 		if len(adapter.HardwareH264) > 0 {
 			summary.HardwareH264 = true
-			break
+		}
+		if len(adapter.HardwareAV1) > 0 {
+			summary.HardwareAV1 = true
 		}
 	}
 	return summary
@@ -170,23 +174,25 @@ func decodeProbe(payload []byte) (Capabilities, error) {
 	for _, adapter := range capabilities.Adapters {
 		if len(adapter.Name) == 0 || len(adapter.Name) > maxIdentityBytes ||
 			len(adapter.Identity) == 0 || len(adapter.Identity) > maxIdentityBytes ||
-			len(adapter.HardwareH264) > maxEncoders {
+			len(adapter.HardwareH264) > maxEncoders || len(adapter.HardwareAV1) > maxEncoders {
 			return Capabilities{}, errors.New("native capture probe returned an invalid adapter")
 		}
 		if _, exists := adapterIndexes[adapter.Index]; exists {
 			return Capabilities{}, errors.New("native capture probe returned duplicate adapters")
 		}
 		adapterIndexes[adapter.Index] = struct{}{}
-		encoderIndexes := make(map[uint32]struct{}, len(adapter.HardwareH264))
-		for _, encoder := range adapter.HardwareH264 {
-			if len(encoder.Name) == 0 || len(encoder.Name) > maxIdentityBytes ||
-				len(encoder.Identity) == 0 || len(encoder.Identity) > maxIdentityBytes {
-				return Capabilities{}, errors.New("native capture probe returned an invalid encoder")
+		for _, encoders := range [][]Encoder{adapter.HardwareH264, adapter.HardwareAV1} {
+			encoderIndexes := make(map[uint32]struct{}, len(encoders))
+			for _, encoder := range encoders {
+				if len(encoder.Name) == 0 || len(encoder.Name) > maxIdentityBytes ||
+					len(encoder.Identity) == 0 || len(encoder.Identity) > maxIdentityBytes {
+					return Capabilities{}, errors.New("native capture probe returned an invalid encoder")
+				}
+				if _, exists := encoderIndexes[encoder.Index]; exists {
+					return Capabilities{}, errors.New("native capture probe returned duplicate encoders")
+				}
+				encoderIndexes[encoder.Index] = struct{}{}
 			}
-			if _, exists := encoderIndexes[encoder.Index]; exists {
-				return Capabilities{}, errors.New("native capture probe returned duplicate encoders")
-			}
-			encoderIndexes[encoder.Index] = struct{}{}
 		}
 	}
 	return capabilities, nil

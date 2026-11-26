@@ -1,5 +1,60 @@
 import { expect, it, vi } from "vitest";
+import { createScreenReceiveAnswer } from "../src/client/webrtc/screen-receive-answer";
 import { normalizeVideoOfferSdp, requireReceivingVideo, supportsH264Receive, VideoReceiveRejectedError } from "../src/client/webrtc/video-codec";
+import { applyVideoCodecPreference, manualVideoCodecPreference, supportsVideoReceive } from "../src/client/webrtc/video-codec";
+
+it("raises only the AV1 receive level confirmed by WebRTC decodingInfo", async () => {
+  const sdp = [
+    "v=0", "o=- 1 1 IN IP4 127.0.0.1", "s=-", "t=0 0", "m=video 9 UDP/TLS/RTP/SAVPF 104 105",
+    "a=recvonly", "a=rtpmap:104 AV1/90000", "a=fmtp:104 profile=0;x-level-idx=5;level-idx=5;tier=0",
+    "a=rtpmap:105 rtx/90000", "a=fmtp:105 apt=104", "",
+  ].join("\r\n");
+  const answer = { type: "answer", sdp } as const;
+  const pc = { createAnswer: async () => answer } as RTCPeerConnection;
+  const decodingInfo = vi.fn(async ({ video }: MediaDecodingConfiguration) => ({
+    supported: true, smooth: video?.width === 2048,
+  }));
+  vi.stubGlobal("navigator", { mediaCapabilities: { decodingInfo } });
+  try {
+    const upgraded = await createScreenReceiveAnswer(pc);
+    expect(upgraded.sdp).toContain("x-level-idx=5;level-idx=9;tier=0");
+    expect(upgraded.sdp).toContain("a=fmtp:105 apt=104");
+    expect(decodingInfo.mock.calls.map(([query]) => query.type)).toEqual(["webrtc", "webrtc", "webrtc", "webrtc"]);
+    decodingInfo.mockResolvedValue({ supported: true, smooth: true });
+    expect((await createScreenReceiveAnswer(pc)).sdp).toContain("x-level-idx=5;level-idx=14;tier=1");
+    decodingInfo.mockResolvedValue({ supported: false, smooth: true });
+    expect(await createScreenReceiveAnswer(pc)).toEqual(answer);
+    decodingInfo.mockRejectedValue(new TypeError("unsupported configuration"));
+    expect(await createScreenReceiveAnswer(pc)).toEqual(answer);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it("selects AV1 Main with repair and keeps manual AV1 strict", () => {
+  const main = { mimeType: "video/AV1", clockRate: 90_000, sdpFmtpLine: "profile=0;tier=0" };
+  const high = { ...main, sdpFmtpLine: "profile=1;tier=0" };
+  const vp8 = { mimeType: "video/VP8", clockRate: 90_000 };
+  const rtx = { mimeType: "video/rtx", clockRate: 90_000 };
+  const codecs = [vp8, high, main, rtx];
+  const setCodecPreferences = vi.fn();
+  vi.stubGlobal("RTCRtpSender", { getCapabilities: () => ({ codecs }) });
+  vi.stubGlobal("RTCRtpReceiver", { getCapabilities: () => ({ codecs: [main] }) });
+  try {
+    expect(applyVideoCodecPreference({ setCodecPreferences } as unknown as RTCRtpTransceiver,
+      manualVideoCodecPreference("av1"))).toBe(true);
+    expect(setCodecPreferences).toHaveBeenCalledWith([main, rtx]);
+    expect(supportsVideoReceive("av1")).toBe(true);
+    codecs.splice(0, codecs.length, vp8, high, rtx);
+    expect(applyVideoCodecPreference({ setCodecPreferences } as unknown as RTCRtpTransceiver,
+      manualVideoCodecPreference("av1"))).toBe(false);
+    expect(setCodecPreferences).toHaveBeenCalledTimes(1);
+    vi.stubGlobal("RTCRtpReceiver", { getCapabilities: () => ({ codecs: [high] }) });
+    expect(supportsVideoReceive("av1")).toBe(false);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
 
 it("checks H264 receive capability independently of sender support", () => {
   const h264 = { mimeType: "video/H264", clockRate: 90_000, sdpFmtpLine: "packetization-mode=1" };

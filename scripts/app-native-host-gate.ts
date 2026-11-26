@@ -33,7 +33,7 @@ const BUILD_ROOT = join(ROOT, "build", "go-check");
 export const SOURCE_TITLE = "Piik Native Gate Source";
 
 type GateMode = "local" | "one-link";
-type VideoCodec = "h264" | "vp8";
+type VideoCodec = "h264" | "vp8" | "av1";
 
 const CODEC_PROBE = `(() => {
   const fitSize = ${fittedCaptureSize.toString()}, matchesSize = ${matchesCaptureSize.toString()};
@@ -64,7 +64,7 @@ const CODEC_PROBE = `(() => {
         if (row.type !== 'inbound-rtp' || row.kind !== 'video' ||
             row.trackIdentifier !== trackId || !(row.framesDecoded > 0)) continue;
         const mime = report.get(row.codecId)?.mimeType?.toLowerCase();
-        if (mime === 'video/h264' || mime === 'video/vp8') return mime.slice(6);
+        if (mime === 'video/h264' || mime === 'video/vp8' || mime === 'video/av1') return mime.slice(6);
       }
     }
     return null;
@@ -231,6 +231,7 @@ async function selectNativeSource(
     `([...document.querySelectorAll(${JSON.stringify(selector)})].find(${predicate}))?.click()`,
     Date.now() + 5_000,
   );
+  await clickHostControl(cdp, page, `document.querySelector('.lr-source-picker-footer button')`);
 }
 
 async function clickHostControl(
@@ -264,7 +265,7 @@ async function clickHostControl(
 async function readVideoCodec(cdp: CdpConnection, page: PageHandle): Promise<VideoCodec> {
   const codec = await waitForValue(
     (deadline) => evaluate<VideoCodec | null>(cdp, page, "window.__piikGateVideoCodec()", deadline),
-    (value) => value === "vp8" || value === "h264",
+    (value) => value === "vp8" || value === "h264" || value === "av1",
     5_000,
   );
   if (codec === null) throw new Error("No decoded video codec was observed");
@@ -590,8 +591,8 @@ async function main(): Promise<void> {
       ? "display"
       : "window";
   const requestedCodec = process.env.PIIK_CLIENT_NATIVE_HOST_CODEC?.trim() || "auto";
-  if (requestedCodec !== "auto" && requestedCodec !== "h264" && requestedCodec !== "vp8") {
-    throw new Error("PIIK_CLIENT_NATIVE_HOST_CODEC must be auto, h264, or vp8");
+  if (requestedCodec !== "auto" && requestedCodec !== "h264" && requestedCodec !== "vp8" && requestedCodec !== "av1") {
+    throw new Error("PIIK_CLIENT_NATIVE_HOST_CODEC must be auto, h264, vp8, or av1");
   }
   const remote = mode === "one-link" &&
     Boolean(process.env.PIIK_REMOTE_HOST?.trim() || process.env.PIIK_REMOTE_SSH_KEY?.trim())
@@ -615,7 +616,7 @@ async function main(): Promise<void> {
   const appConfig = join(profile, "client.json");
   const captureBuild = BUILD_ROOT;
   const appBinary = join(BUILD_ROOT, "piik-app.exe");
-  const captureBinary = join(captureBuild, "piik-capture.exe");
+  const captureBinary = process.env.PIIK_CAPTURE_PROCESS?.trim() || join(captureBuild, "piik-capture.exe");
   const remoteBinary = join(BUILD_ROOT, "piik-peer-gate-linux");
   let source: { close(): Promise<void> } | null = null;
   let app: ChildProcessWithoutNullStreams | null = null;
@@ -681,7 +682,7 @@ async function main(): Promise<void> {
     source = await sourceServer(sourcePort);
     stage = "capture-build";
     process.stderr.write(`${JSON.stringify({ stage, status: "started", at: new Date().toISOString() })}\n`);
-    run(powershell(), [
+    if (!process.env.PIIK_CAPTURE_PROCESS?.trim()) run(powershell(), [
       "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
       join(ROOT, "native", "capture", "windows", "build.ps1"),
       "-OutputDirectory", captureBuild,
@@ -1311,6 +1312,9 @@ async function main(): Promise<void> {
               windowId, bounds: { windowState: "normal" },
             }, undefined, Date.now() + 5_000);
           }
+          // Fullscreen can occlude playback and suspend Browser decoding. Keep
+          // the observed Viewer visible while WGC captures the source behind it.
+          await cdp.call("Page.bringToFront", {}, viewer.sessionId, Date.now() + 5_000);
           const before = await evaluate<number>(cdp, viewer,
             "document.querySelector('video')?.getVideoPlaybackQuality().totalVideoFrames ?? 0", Date.now() + 5_000);
           await waitForValue((deadline) => evaluate<boolean>(cdp!, viewer,

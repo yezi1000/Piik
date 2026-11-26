@@ -75,7 +75,7 @@ async function main(): Promise<void> {
   const twoRooms = process.env.PIIK_EMBEDDED_SFU_TWO_ROOMS === "true";
   if (twoRooms && !nativeArm) throw new Error("Two-room arm requires Native publication");
   const codec = process.env.PIIK_EMBEDDED_SFU_CODEC?.trim() || "vp8";
-  if (codec !== "vp8" && codec !== "h264") throw new Error("SFU gate codec must be vp8 or h264");
+  if (codec !== "vp8" && codec !== "h264" && codec !== "av1") throw new Error("SFU gate codec must be vp8, h264, or av1");
   const captureBinary = process.env.PIIK_CAPTURE_PROCESS?.trim();
   if (nativeArm && (process.platform !== "win32" || !captureBinary)) {
     throw new Error("Native arm requires Windows and PIIK_CAPTURE_PROCESS");
@@ -97,7 +97,8 @@ async function main(): Promise<void> {
   const profile = await mkdtemp(join(tmpdir(), "piik-client-media-"));
   const sourceProfile = nativeArm ? await mkdtemp(join(tmpdir(), "piik-client-media-")) : null;
   const [sourcePort, sourceDebugPort] = nativeArm ? [await reservePort(), await reservePort()] : [0, 0];
-  const result = { passed: false, arm: `${nativeArm ? "native" : displayArm ? "display" : "browser"}-${codec}-simulcast${twoRooms ? "-two-rooms" : ""}`, stage: "start",
+  const expectSimulcast = nativeArm || codec !== "av1";
+  const result = { passed: false, arm: `${nativeArm ? "native" : displayArm ? "display" : "browser"}-${codec}-${expectSimulcast ? "simulcast" : "single"}${twoRooms ? "-two-rooms" : ""}`, stage: "start",
     sfuOnly, captureSize, stereoSeparationDb: null as number[] | null,
     startedAt: new Date().toISOString(), finishedAt: "", processes: [] as Array<{ role: string; pid: number | null }>,
     high: null as { frames: number; width: number; height: number } | null,
@@ -421,7 +422,7 @@ async function main(): Promise<void> {
       Object.values(cleanup).every(Boolean) && (!sourceCleanup || Object.values(sourceCleanup).every(Boolean));
   }
   result.finishedAt = new Date().toISOString();
-  result.passed = !result.error && result.host?.published === true && result.host.simulcast &&
+  result.passed = !result.error && result.host?.published === true && result.host.simulcast === expectSimulcast &&
     result.viewer?.decoded === true && result.viewer.committed &&
     (sfuOnly ? result.viewer.peerFailures === 0 : result.viewer.peerFailures > 0) &&
     (nativeArm || result.stereoSeparationDb?.every(db => db > 20) === true) &&

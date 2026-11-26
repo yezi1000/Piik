@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
-import { MetricCells } from "../src/client/components/living/Metrics";
+import { codecContractWarnings, MetricCells } from "../src/client/components/living/Metrics";
 import { ViewerOverview } from "../src/client/components/living/ViewerOverview";
 import { EMPTY_METRICS } from "../src/client/types";
 import { setCopy, t } from "../src/client/ui/copy";
@@ -10,6 +10,12 @@ import { STATUS_CATALOG } from "../src/client/ui/media-status";
 beforeEach(() => setCopy({ lang: "en", vis: false }));
 
 describe("observed metric presentation", () => {
+  it("accepts AV1 video and still warns about an unexpected codec", () => {
+    const warnings = (codec: string) => codecContractWarnings({ ...EMPTY_METRICS, codec }, key => key);
+    expect(warnings("video/AV1")).toEqual([]);
+    expect(warnings("video/VP9")).toEqual(["stats.warn.codec"]);
+  });
+
   it("reports dropped frames from the current sampling interval, not the connection lifetime", () => {
     const render = (intervalFramesDropped: number | null) => renderToStaticMarkup(createElement(MetricCells, {
       metrics: { ...EMPTY_METRICS, framesDropped: 300, intervalFramesDropped },

@@ -135,6 +135,7 @@ func (session *Session) AcceptOffer(
 	iceServers []webrtc.ICEServer,
 	reuse bool,
 	punched bool,
+	av1 bool,
 ) (OfferResult, error) {
 	if connectionID == "" || len(connectionID) > 256 {
 		return OfferResult{}, errors.New("native Viewer receiver identity is invalid")
@@ -150,7 +151,7 @@ func (session *Session) AcceptOffer(
 	if atCapacity {
 		return OfferResult{}, errors.New("native Viewer receiver capacity reached")
 	}
-	if reuse && receiver != nil {
+	if reuse && receiver != nil && (receiver.Codec() != "av1" || av1) {
 		answer, reused, err := receiver.Renegotiate(offer, iceServers)
 		if err != nil {
 			return OfferResult{}, err
@@ -176,6 +177,7 @@ func (session *Session) AcceptOffer(
 		inputTransportAvailable = input.SetUpAvailable
 	}
 	mediaReceiver, answer, err := session.engine.NewReceiver(mediaedge.ReceiverOptions{
+		AV1:           av1,
 		Offer:         offer,
 		ICEServers:    iceServers,
 		EdgeCapacity:  mediaedge.PhysicalSourceCapacity(session.edgeCapacity),

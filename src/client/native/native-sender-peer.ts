@@ -129,7 +129,7 @@ export class NativeSenderPeer implements HostMediaPeer {
               codec: `video/${codec.toUpperCase()}`,
               codecProfile: null,
               codecParameters: null,
-              powerEfficientEncoder: this.source ? null : codec === "h264",
+              powerEfficientEncoder: this.source ? null : codec !== "vp8",
               // The published wire name counts this output's forwarded RTP frames.
               intervalFramesSent: quality.intervalFramesEncoded,
               qualityLimitationReason: quality.reason,

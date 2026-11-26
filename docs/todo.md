@@ -1,6 +1,6 @@
 # Current TODO Ledger
 
-Last reviewed: 2026-11-21
+Last reviewed: 2026-11-27
 
 This ledger contains unfinished work and explicit owner holds. Product modules
 own behavior; research and Git/PRs own evidence and completed history.
@@ -76,6 +76,26 @@ own behavior; research and Git/PRs own evidence and completed history.
   owns the patch and removal boundary.
 
 ## Next
+
+- **Game sharing on an 8–12 Mbps Host uplink.** For discussion before changing presets.
+  Treat 8, 10 and 12 Mbps as total uplink budgets. Record actual video payload rate
+  and total upload including audio, retransmissions and transport overhead.
+  - [ ] Compare AV1 and H.264 at 1080p60 on the same fast pans, foliage, particles
+    and HUD text. On the 12 Mbps link, also compare the current 8 Mbps video ceiling
+    with 10 Mbps. Compare decoded frames at matched delivered rates and record
+    frame cadence, freezes and the worst-looking moments. The existing
+    [game footage comparison](./research/native-client-media.md#low-bitrate-game-capture-2026-11-25)
+    covers 1–4 Mbps.
+  - [ ] At each visible blur or stall, align decoded frames with encoder output
+    dimensions, encoded frame size and send-queue delay. Use the existing
+    [H.264 scene-change investigation](./research/webrtc-encoder-pool.md#h264-burst-and-recovery)
+    to distinguish scaling, compression and queuing before choosing a fix.
+  - [ ] Using a native 1440p source, compare 1080p60 and 1440p60 at the same
+    delivered video rate and viewing size on 10–12 Mbps links. Compare HUD
+    legibility and motion detail before proposing a higher-resolution preset.
+  - [ ] If mixed-bandwidth rooms become a priority, compare Browser AV1 single-stream
+    delivery with SVC using one strong and one constrained Viewer. Decide from Host
+    upload, strong-Viewer picture quality and constrained-Viewer freeze duration.
 
 - [ ] **2.x optional SFU provider.** Implement and verify the
   [deployment-owned Cloudflare SFU adapter](./research/embedded-media.md#cloudflare-realtime-sfu).

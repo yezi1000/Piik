@@ -272,7 +272,7 @@ func PreviewSource(parent context.Context, executable string, target CaptureTarg
 
 func StartVideo(parent context.Context, executable string, options VideoOptions) (*Stream, error) {
 	if !options.Target.Valid() || !options.Profile.Valid() ||
-		(options.Codec != "auto" && options.Codec != "h264" && options.Codec != "vp8") ||
+		(options.Codec != "auto" && options.Codec != "h264" && options.Codec != "vp8" && options.Codec != "av1") ||
 		options.OutputGroups < 0 || options.OutputGroups > MaxOutputGroups ||
 		len(options.RestoreToken) > 4096 || !utf8.ValidString(options.RestoreToken) ||
 		strings.ContainsRune(options.RestoreToken, 0) {

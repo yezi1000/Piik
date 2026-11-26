@@ -3,6 +3,7 @@ package forwarding
 import (
 	"errors"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/TNTcraftHIM/Piik/internal/media/encoded"
@@ -45,8 +46,10 @@ func NewEncodedSource(options SourceOptions) (*EncodedSource, error) {
 	}
 	for layer := range input.packetizers {
 		var payloader rtp.Payloader = &codecs.H264Payloader{}
-		if options.Codec.MimeType == webrtc.MimeTypeVP8 {
+		if strings.EqualFold(options.Codec.MimeType, webrtc.MimeTypeVP8) {
 			payloader = &codecs.VP8Payloader{EnablePictureID: true}
+		} else if strings.EqualFold(options.Codec.MimeType, webrtc.MimeTypeAV1) {
+			payloader = &codecs.AV1Payloader{}
 		}
 		input.packetizers[layer] = encoded.NewPacketizer(payloader, uint8(options.Codec.PayloadType), 1200)
 		// These identities stay inside this source's private buffers. DownTrack

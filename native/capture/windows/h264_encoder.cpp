@@ -148,7 +148,8 @@ std::wstring GetOptionalString(IMFAttributes* attributes, const GUID& key) {
 }
 
 ActivationList EnumerateHardwareEncoders(const Adapter& adapter,
-                                         bool require_candidate) {
+                                         bool require_candidate,
+                                         OutputKind kind) {
   ComPtr<IMFAttributes> attributes;
   Check(MFCreateAttributes(&attributes, 1), "mft-enumeration-attributes");
   Check(attributes->SetBlob(MFT_ENUM_ADAPTER_LUID,
@@ -158,7 +159,8 @@ ActivationList EnumerateHardwareEncoders(const Adapter& adapter,
         "mft-enumeration-adapter-luid");
 
   MFT_REGISTER_TYPE_INFO input = {MFMediaType_Video, MFVideoFormat_NV12};
-  MFT_REGISTER_TYPE_INFO output = {MFMediaType_Video, MFVideoFormat_H264};
+  MFT_REGISTER_TYPE_INFO output = {MFMediaType_Video,
+      kind == OutputKind::av1 ? MFVideoFormat_AV1 : MFVideoFormat_H264};
   ActivationList list;
   Check(MFTEnum2(MFT_CATEGORY_VIDEO_ENCODER,
                  MFT_ENUM_FLAG_HARDWARE | MFT_ENUM_FLAG_SORTANDFILTER,
@@ -166,7 +168,7 @@ ActivationList EnumerateHardwareEncoders(const Adapter& adapter,
         "mft-hardware-enumeration");
   if (require_candidate && list.count == 0) {
     Fail("mft-hardware-enumeration",
-         "selected adapter exposed no hardware NV12-to-H264 MFT");
+         "selected adapter exposed no hardware MFT for the requested codec");
   }
   return list;
 }
@@ -325,12 +327,13 @@ void ConfigureCodec(
 }
 
 ComPtr<IMFMediaType> CreateOutputType(
-    const VideoProfile& profile) {
+    const VideoProfile& profile, OutputKind kind) {
   ComPtr<IMFMediaType> type;
   Check(MFCreateMediaType(&type), "output-type-create");
   Check(type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video),
         "output-type-major");
-  Check(type->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264),
+  Check(type->SetGUID(MF_MT_SUBTYPE,
+                        kind == OutputKind::av1 ? MFVideoFormat_AV1 : MFVideoFormat_H264),
         "output-type-subtype");
   SetSdrVideoColor(type.Get());
   Check(type->SetUINT32(MF_MT_AVG_BITRATE, profile.bit_rate),
@@ -346,7 +349,8 @@ ComPtr<IMFMediaType> CreateOutputType(
                         MFVideoInterlace_Progressive),
         "output-type-interlace");
   // Baseline alone does not require the constrained tools negotiated by WebRTC.
-  Check(type->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_ConstrainedBase),
+  Check(type->SetUINT32(MF_MT_MPEG2_PROFILE,
+                        kind == OutputKind::av1 ? 0 : eAVEncH264VProfile_ConstrainedBase),
         "output-type-profile");
   // MF recommends automatic level selection. Forcing a valid level can still
   // make hardware reject the type; validate the actual SPS instead.
@@ -388,19 +392,19 @@ void RequireTypeU32(IMFAttributes* type, const GUID& key, UINT32 expected,
 
 void ValidateMediaTypes(
     IMFTransform* transform,
-    const VideoProfile& profile) {
+    const VideoProfile& profile, OutputKind kind) {
   ComPtr<IMFMediaType> output;
   Check(transform->GetOutputCurrentType(0, &output),
         "output-type-current");
   GUID subtype = {};
   Check(output->GetGUID(MF_MT_SUBTYPE, &subtype), "output-type-subtype-readback");
-  if (subtype != MFVideoFormat_H264) {
-    Fail("output-type-subtype-weakened", "output is not H264");
+  if (subtype != (kind == OutputKind::av1 ? MFVideoFormat_AV1 : MFVideoFormat_H264)) {
+    Fail("output-type-subtype-weakened", "output codec changed");
   }
   RequireTypeU32(output.Get(), MF_MT_AVG_BITRATE, profile.bit_rate,
                  "output-type-bitrate");
   RequireTypeU32(output.Get(), MF_MT_MPEG2_PROFILE,
-                 eAVEncH264VProfile_ConstrainedBase, "output-type-profile");
+                 kind == OutputKind::av1 ? 0 : eAVEncH264VProfile_ConstrainedBase, "output-type-profile");
 
   UINT32 width = 0;
   UINT32 height = 0;
@@ -631,17 +635,17 @@ void RequireEncoderTime(EncoderClock::time_point deadline) {
 
 LiveEncoder::LiveEncoder(
     SelectedTransform selected,
-    VideoProfile profile)
-    : VideoEncoder(OutputKind::h264, selected.name, selected.clsid),
+    VideoProfile profile, OutputKind kind)
+    : VideoEncoder(kind, selected.name, selected.clsid),
       selected_(std::move(selected)), events_(selected_.events.Get()), profile_(profile) {
   ConfigureCodec(selected_.codec.Get(), profile_);
-  ComPtr<IMFMediaType> output_type = CreateOutputType(profile_);
+  ComPtr<IMFMediaType> output_type = CreateOutputType(profile_, kind);
   Check(selected_.transform->SetOutputType(0, output_type.Get(), 0),
         "mft-set-output-type");
   ComPtr<IMFMediaType> input_type = CreateInputType(profile_);
   Check(selected_.transform->SetInputType(0, input_type.Get(), 0),
         "mft-set-input-type");
-  ValidateMediaTypes(selected_.transform.Get(), profile_);
+  ValidateMediaTypes(selected_.transform.Get(), profile_, kind);
   ValidateCodecReadback(selected_.codec.Get(), profile_);
   Check(selected_.transform->GetOutputStreamInfo(0, &output_info_),
         "mft-output-stream-info");
@@ -697,6 +701,17 @@ EncodedAccessUnit LiveEncoder::Encode(
       Fail("output-order", "hardware MFT changed or reordered a live timestamp");
     }
     std::vector<UINT8> bytes = ReadSample(output.Get());
+    if (kind == OutputKind::av1) {
+      const bool recovery = MFGetAttributeUINT32(output.Get(), MFSampleExtension_CleanPoint, FALSE) != FALSE;
+      if (!has_output_ && !recovery) {
+        Fail("bitstream-recovery-unit", "initial AV1 output is not an independent frame");
+      }
+      has_output_ = true;
+      RequireEncoderTime(probe_deadline);
+      // The matched Go reader validates the AV1 sequence and envelope bounds
+      // before this output reaches the packetizer or a browser decoder.
+      return EncodedAccessUnit{timestamp100ns, recovery, std::move(bytes)};
+    }
     NalSummary nal = InspectAnnexB(bytes);
     if (!nal.annex_b) {
       Fail("bitstream-annexb", "live output is not Annex-B H264");

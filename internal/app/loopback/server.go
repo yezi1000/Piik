@@ -105,6 +105,8 @@ type NativeMediaCapabilities struct {
 	ProcessAudioExclusion        bool                       `json:"processAudioExclusion,omitempty"`
 	SystemAudio                  bool                       `json:"systemAudio"`
 	HardwareH264                 bool                       `json:"hardwareH264"`
+	AV1                          bool                       `json:"av1,omitempty"`
+	HardwareAV1                  bool                       `json:"hardwareAV1,omitempty"`
 	SoftwareVP8                  bool                       `json:"softwareVP8"`
 }
 

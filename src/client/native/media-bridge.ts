@@ -4,7 +4,7 @@ import { createOpaqueId } from "../lib/opaque-id";
 import { browserDebugEnabled, debugError, debugEvent } from "../lib/debug";
 import { observeDebugConnection } from "../lib/debug-webrtc";
 import type { ConnectionMetrics } from "../types";
-import { preferScreenAudioStereo } from "../webrtc/opus-receive-sdp";
+import { createScreenReceiveAnswer } from "../webrtc/screen-receive-answer";
 import { requireReceivingVideo } from "../webrtc/video-codec";
 import { RemoteInputChannel } from "../webrtc/remote-input-channel";
 import {
@@ -225,7 +225,7 @@ export class NativeMediaBridge {
     this.lifetime.signal.throwIfAborted();
     await this.peer.setRemoteDescription(offer);
     this.lifetime.signal.throwIfAborted();
-    const answer = preferScreenAudioStereo(await this.peer.createAnswer());
+    const answer = await createScreenReceiveAnswer(this.peer);
     this.lifetime.signal.throwIfAborted();
     requireReceivingVideo(offer, answer);
     await this.peer.setLocalDescription(answer);

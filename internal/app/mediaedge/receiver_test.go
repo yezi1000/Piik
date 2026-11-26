@@ -145,7 +145,7 @@ func TestReceiverAdvertisesLocalStereoPreference(t *testing.T) {
 }
 
 func TestReceiverRetainsRepairForOnlyTheSelectedCodec(t *testing.T) {
-	for _, name := range []string{"vp8", "h264"} {
+	for _, name := range []string{"vp8", "h264", "av1"} {
 		t.Run(name, func(t *testing.T) {
 			engine, err := NewEngine(EngineOptions{BindAddress: "127.0.0.1:0", IncludeLoopback: true})
 			if err != nil {
@@ -166,7 +166,7 @@ func TestReceiverRetainsRepairForOnlyTheSelectedCodec(t *testing.T) {
 			var preferences []webrtc.RTPCodecParameters
 			for _, codec := range transceiver.Sender().GetParameters().Codecs {
 				if strings.EqualFold(codec.MimeType, "video/"+name) &&
-					(name == "vp8" || strings.Contains(codec.SDPFmtpLine, "profile-level-id=42e01f") &&
+					(name == "vp8" || name == "av1" || strings.Contains(codec.SDPFmtpLine, "profile-level-id=42e01f") &&
 						strings.Contains(codec.SDPFmtpLine, "packetization-mode=1")) || codec.MimeType == webrtc.MimeTypeRTX {
 					preferences = append(preferences, codec)
 				}
@@ -194,7 +194,14 @@ func TestReceiverRetainsRepairForOnlyTheSelectedCodec(t *testing.T) {
 			if err = upstream.SetLocalDescription(offer); err != nil {
 				t.Fatal(err)
 			}
-			receiver, answer, err := engine.NewReceiver(ReceiverOptions{Offer: offer, EdgeCapacity: 1})
+			if name == "av1" {
+				legacy, _, legacyErr := engine.NewReceiver(ReceiverOptions{Offer: offer, EdgeCapacity: 1})
+				if legacyErr == nil {
+					_ = legacy.Close()
+					t.Fatal("AV1 was accepted without an explicit capability opt-in")
+				}
+			}
+			receiver, answer, err := engine.NewReceiver(ReceiverOptions{Offer: offer, EdgeCapacity: 1, AV1: name == "av1"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -221,6 +228,9 @@ func TestReceiverRetainsRepairForOnlyTheSelectedCodec(t *testing.T) {
 					}
 					if !strings.EqualFold(codec.Name, receiver.Codec()) {
 						t.Fatalf("unexpected primary codec: %v", codec)
+					}
+					if name == "av1" && !strings.Contains(codec.Fmtp, "level-idx=31") {
+						t.Fatalf("forwarding receiver inherited the sender's receive limit: %v", codec)
 					}
 					found := false
 					for _, repair := range codecs {

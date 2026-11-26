@@ -142,9 +142,15 @@ func (session *Session) Handle(ctx context.Context, payload []byte) (result any,
 		if err := decodeStrict(payload, &request); err != nil || request.Type != envelope.Type {
 			return nil, protocolViolation("native capture-options request is invalid")
 		}
+		adapters := append([]nativecapture.Adapter{}, session.capabilities.Adapters...)
+		if !request.AV1 {
+			for index := range adapters {
+				adapters[index].HardwareAV1 = nil
+			}
+		}
 		return captureOptionsResponse{
 			responseEnvelope: response(envelope, "capture-options"),
-			Adapters:         session.capabilities.Adapters,
+			Adapters:         adapters,
 		}, nil
 	case "list-microphones":
 		var request requestEnvelope
@@ -200,7 +206,7 @@ func (session *Session) Handle(ctx context.Context, payload []byte) (result any,
 			!identityPattern.MatchString(request.ShareID) ||
 			!request.Source.Valid() ||
 			request.EdgeCapacity < 1 || request.EdgeCapacity > maxEdgeCapacity ||
-			(request.Codec != "auto" && request.Codec != "h264" && request.Codec != "vp8") {
+			(request.Codec != "auto" && request.Codec != "h264" && request.Codec != "vp8" && request.Codec != "av1") {
 			return nil, protocolViolation("native start-share request is invalid")
 		}
 		if !nativeQualityProfile(request.Profile).Valid() {
@@ -875,6 +881,7 @@ func (session *Session) receiveOffer(
 		servers,
 		request.ReuseReceiver,
 		request.Punched,
+		request.AV1,
 	)
 	if err != nil {
 		return nil, err

@@ -129,7 +129,7 @@ func (media *Media) HasPublication(fence ResourceFence, connectionID string) boo
 }
 
 func validPublicationMedia(metadata PublicationMedia) bool {
-	if (metadata.Codec != "h264" && metadata.Codec != "vp8") ||
+	if (metadata.Codec != "h264" && metadata.Codec != "vp8" && metadata.Codec != "av1") ||
 		len(metadata.Formats) < 1 || len(metadata.Formats) > 3 ||
 		len(metadata.RIDs) != len(metadata.Formats) ||
 		(metadata.Audio && metadata.AudioBitrate == 0) {
@@ -372,13 +372,17 @@ func (media *Media) AcceptPublisherOffer(fence ResourceFence, connectionID strin
 		}
 		parameters := transceiver.Receiver().GetParameters()
 		selected := slices.DeleteFunc(slices.Clone(parameters.Codecs), func(codec webrtc.RTPCodecParameters) bool {
-			return !strings.EqualFold(codec.MimeType, name)
+			return !strings.EqualFold(codec.MimeType, name) ||
+				strings.EqualFold(name, webrtc.MimeTypeAV1) && !forwarding.IsAV1MainFormat(codec.SDPFmtpLine)
 		})
 		if len(selected) == 0 {
 			return webrtc.SessionDescription{}, errors.New("SFU publisher codec does not match its declaration")
 		}
 		if transceiver.Kind() == webrtc.RTPCodecTypeAudio {
 			selected[0].SDPFmtpLine = "minptime=10;useinbandfec=1;stereo=1;usedtx=0;maxaveragebitrate=" + strconv.Itoa(protocol.MaxAudioBitrate)
+		}
+		if strings.EqualFold(name, webrtc.MimeTypeAV1) {
+			selected[0].SDPFmtpLine = forwarding.AV1ForwardingFMTP
 		}
 		if err = transceiver.SetCodecPreferences(forwarding.WithRTX(selected[0], parameters.Codecs)); err != nil {
 			return webrtc.SessionDescription{}, err
@@ -446,12 +450,23 @@ func (publication *mediaPublication) consumeTrack(track *webrtc.TrackRemote, rec
 		return
 	}
 	if video {
+		parameters := receiver.GetParameters()
 		if publication.source == nil {
+			// TrackRemote retains the offer's fmtp. The receiver's parameters
+			// describe the selected format, including our asymmetric AV1 answer.
+			index := slices.IndexFunc(parameters.Codecs, func(c webrtc.RTPCodecParameters) bool {
+				return c.PayloadType == track.Codec().PayloadType && strings.EqualFold(c.MimeType, track.Codec().MimeType)
+			})
+			if index < 0 {
+				publication.mu.Unlock()
+				publication.fail(errors.New("SFU video payload has no negotiated codec"))
+				return
+			}
 			var err error
 			publication.source, err = forwarding.NewSource(forwarding.SourceOptions{
 				ID: publication.fence.PublicationGeneration, StreamID: publication.fence.PublicationGeneration,
-				Codec: track.Codec(), Formats: publication.metadata.Formats,
-				HeaderExtensions: receiver.GetParameters().HeaderExtensions,
+				Codec: parameters.Codecs[index], Formats: publication.metadata.Formats,
+				HeaderExtensions: parameters.HeaderExtensions,
 				OnRTCP: func(_ int, packets []rtcp.Packet) {
 					// The buffer sees repaired primary sequence numbers and owns NACK;
 					// Pion retains receiver reports and transport-wide feedback.
@@ -469,7 +484,7 @@ func (publication *mediaPublication) consumeTrack(track *webrtc.TrackRemote, rec
 				return
 			}
 		}
-		if err := publication.source.BindLayer(layer, uint32(track.SSRC()), receiver.GetParameters()); err != nil {
+		if err := publication.source.BindLayer(layer, uint32(track.SSRC()), parameters); err != nil {
 			publication.mu.Unlock()
 			publication.fail(err)
 			return

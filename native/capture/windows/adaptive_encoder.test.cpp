@@ -13,8 +13,8 @@ using namespace piik::capture::windows;
 
 class DelayedKeyframeEncoder final : public piik::capture::windows::VideoEncoder {
  public:
-  explicit DelayedKeyframeEncoder(std::vector<bool>& requests)
-      : VideoEncoder(piik::capture::OutputKind::h264, "fixture", "fixture"), requests_(requests) {}
+  DelayedKeyframeEncoder(piik::capture::OutputKind kind, std::vector<bool>& requests)
+      : VideoEncoder(kind, "fixture", "fixture"), requests_(requests) {}
   EncodedAccessUnit Encode(ID3D11Texture2D*, UINT64 timestamp, bool key,
       EncoderClock::time_point) override {
     requests_.push_back(key);
@@ -28,32 +28,37 @@ class DelayedKeyframeEncoder final : public piik::capture::windows::VideoEncoder
 
 class Frames final : public webrtc::EncodedImageCallback {
  public:
+  explicit Frames(webrtc::VideoCodecType codec) : codec_(codec) {}
   void OnFrameDropped(uint32_t, int, bool) override { assert(false); }
   Result OnEncodedImage(const webrtc::EncodedImage& image,
-      const webrtc::CodecSpecificInfo*) override {
+      const webrtc::CodecSpecificInfo* info) override {
+    assert(info && info->codecType == codec_);
+    assert(info->scalability_mode == webrtc::ScalabilityMode::kL1T1);
     keys.push_back(image.IsKey());
     return Result(Result::OK);
   }
   std::vector<bool> keys;
+ private:
+  webrtc::VideoCodecType codec_;
 };
 
-int main() {
+int CheckDelayedKeyframe(piik::capture::OutputKind kind) {
   const VideoProfile profile{64, 64, 30, 300'000};
   const auto env = webrtc::CreateEnvironment();
   Failure failure;
   std::vector<bool> requests;
-  HardwareEncoder encoder(env, profile, [&](const VideoProfile&) {
-    return std::make_unique<DelayedKeyframeEncoder>(requests);
+  HardwareEncoder encoder(env, kind, profile, [&](const VideoProfile&) {
+    return std::make_unique<DelayedKeyframeEncoder>(kind, requests);
   }, nullptr, failure);
   webrtc::VideoCodec config{};
-  config.codecType = webrtc::kVideoCodecH264;
+  config.codecType = CodecType(kind);
   config.width = 64;
   config.height = 64;
   config.maxFramerate = 30;
   config.startBitrate = 300;
   assert(encoder.InitEncode(&config, webrtc::VideoEncoder::Settings(
       webrtc::VideoEncoder::Capabilities(false), 1, 1200)) == WEBRTC_VIDEO_CODEC_OK);
-  Frames frames;
+  Frames frames(config.codecType);
   encoder.RegisterEncodeCompleteCallback(&frames);
   ComPtr<ID3D11Device> device;
   Check(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, nullptr, 0,
@@ -75,4 +80,10 @@ int main() {
     std::cerr << "A delayed keyframe lost its pending recovery request\n";
     return 1;
   }
+  return 0;
+}
+
+int main() {
+  if (CheckDelayedKeyframe(piik::capture::OutputKind::h264) != 0) return 1;
+  return CheckDelayedKeyframe(piik::capture::OutputKind::av1);
 }

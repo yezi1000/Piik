@@ -12,14 +12,14 @@ export function defaultNativeCapturePath(
 ): NativeCapturePath | null {
   if (codec !== "vp8") {
     for (const adapter of adapters) {
-      const encoder = adapter.hardwareH264[0];
+      const encoder = codec === "av1" ? adapter.hardwareAV1?.[0] : adapter.hardwareH264[0];
       if (encoder) {
         return { adapterIndex: adapter.index, encoderIndex: encoder.index };
       }
     }
   }
   const adapter = adapters[0];
-  return codec !== "h264" && softwareVP8 && adapter
+  return (codec === "auto" || codec === "vp8") && softwareVP8 && adapter
     ? { adapterIndex: adapter.index, encoderIndex: 0 }
     : null;
 }

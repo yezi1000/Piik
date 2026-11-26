@@ -704,7 +704,7 @@ func discoverNativeMedia(ctx context.Context, configuredPath string) nativeRunti
 	capabilities, err := nativecapture.Discover(ctx, path)
 	if err != nil {
 		return nativeRuntime{captureProcess: path, discoveryErr: err,
-			capabilities: loopback.NativeMediaCapabilities{ReceiverReuse: true, MaxRelayChildren: mediaedge.MaxRelayChildren}}
+			capabilities: loopback.NativeMediaCapabilities{ReceiverReuse: true, AV1: true, MaxRelayChildren: mediaedge.MaxRelayChildren}}
 	}
 	summary := capabilities.Summary()
 	return nativeRuntime{
@@ -730,6 +730,8 @@ func discoverNativeMedia(ctx context.Context, configuredPath string) nativeRunti
 			CaptureFailureDetails:        true,
 			SystemAudio:                  summary.SystemAudio,
 			HardwareH264:                 summary.HardwareH264,
+			AV1:                          true,
+			HardwareAV1:                  summary.HardwareAV1,
 			SoftwareVP8:                  summary.SoftwareVP8,
 		},
 	}

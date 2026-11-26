@@ -40,9 +40,17 @@ var vp8Capability = webrtc.RTPCodecCapability{
 	RTCPFeedback: h264Capability.RTCPFeedback,
 }
 
+var av1Capability = webrtc.RTPCodecCapability{
+	MimeType:     webrtc.MimeTypeAV1,
+	ClockRate:    videoClockRate,
+	SDPFmtpLine:  forwarding.AV1ForwardingFMTP,
+	RTCPFeedback: h264Capability.RTCPFeedback,
+}
+
 var videoCodecs = map[string]webrtc.RTPCodecParameters{
 	"h264": {RTPCodecCapability: h264Capability, PayloadType: h264PayloadType},
 	"vp8":  {RTPCodecCapability: vp8Capability, PayloadType: vp8PayloadType},
+	"av1":  {RTPCodecCapability: av1Capability, PayloadType: av1PayloadType},
 }
 
 type EngineOptions struct {
@@ -84,7 +92,7 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 	settingEngine.SetIncludeLoopbackCandidate(options.IncludeLoopback)
 
 	mediaEngine := &webrtc.MediaEngine{}
-	for _, codec := range []string{"h264", "vp8"} {
+	for _, codec := range []string{"h264", "vp8", "av1"} {
 		primary := videoCodecs[codec]
 		if err := mediaEngine.RegisterCodec(primary, webrtc.RTPCodecTypeVideo); err != nil {
 			return nil, err

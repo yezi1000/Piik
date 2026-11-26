@@ -92,6 +92,7 @@ class FakeSender {
                 sdpFmtpLine: "packetization-mode=1;profile-level-id=42e01f",
               },
               { mimeType: "video/VP9", clockRate: 90000 },
+              { mimeType: "video/AV1", clockRate: 90000, sdpFmtpLine: "profile=0;tier=0;level-idx=5" },
             ],
     };
   }
@@ -248,6 +249,24 @@ function feedVideoStats(
 }
 
 describe("embedded SFU browser transport", () => {
+  it("publishes AV1 at full size with one encoding and retains it through live updates", async () => {
+    const send = vi.fn(() => true);
+    const host = new SfuPublisher({ send });
+    cleanups.push(() => host.disconnect());
+    await host.connect(config);
+    await expect(host.activate(stream(new FakeTrack("video")), QUALITY_PROFILES["1080p30"], "av1")).resolves.toBe(true);
+    const sender = FakePc.instances[0]!.transceivers[0]!.sender;
+    expect(sender.parameters.encodings).toEqual([expect.objectContaining({
+      rid: "q", scaleResolutionDownBy: 1, maxBitrate: 5_000_000,
+    })]);
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "description", media: expect.objectContaining({ codec: "av1", layers: [expect.objectContaining({ width: 1920, height: 1080 })] }),
+    }));
+    await host.updateProfile(QUALITY_PROFILES["720p30"]);
+    expect(sender.parameters.encodings).toHaveLength(1);
+    expect(sender.parameters.encodings[0]!.scaleResolutionDownBy).toBe(1.5);
+  });
+
   it.each([undefined, "q"])("declares the sender's single encoding RID (%s)", async (rid) => {
     const video = new FakeTrack("video");
     video.getSettings.mockReturnValue({ width: 320, height: 180, frameRate: 30 });

@@ -51,7 +51,7 @@ let stopping = false;
 let peerFailures = 0;
 let published = false;
 let simulcast = false;
-let codec: "vp8" | "h264" = "vp8";
+let codec: "vp8" | "h264" | "av1" = "vp8";
 let audioKbps = 0;
 let audioCodec: string | null = null;
 let error: string | null = null;
@@ -197,7 +197,7 @@ async function connect(room: CreateRoomResponse, host: boolean): Promise<void> {
     : { ...common, role: "viewer", viewerGrant: new URLSearchParams(new URL(room.inviteUrl).hash.slice(1)).get("v")! });
 }
 
-export async function startHost(nativeSource?: { title: string; port: number }, selectedCodec: "vp8" | "h264" = "vp8", display = false, size?: QualitySettings["resolution"]): Promise<CreateRoomResponse> {
+export async function startHost(nativeSource?: { title: string; port: number }, selectedCodec: "vp8" | "h264" | "av1" = "vp8", display = false, size?: QualitySettings["resolution"]): Promise<CreateRoomResponse> {
   codec = selectedCodec;
   profile = size ? { ...high, resolution: size, maxFramerate: 60, maxBitrate: 50_000_000 } : high;
   const response = await fetch("/api/rooms", {

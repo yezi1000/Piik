@@ -15,7 +15,16 @@ namespace piik::capture {
 
 constexpr DWORD kMaxProductAccessUnitBytes = 4 * 1024 * 1024;
 constexpr DWORD kMaxStatusBytes = 4 * 1024;
-enum class OutputKind : UINT8 { pcm = 1, h264 = 2, status = 3, vp8 = 4, begin = 5, unavailable = 6 };
+enum class OutputKind : UINT8 { pcm = 1, h264 = 2, status = 3, vp8 = 4, begin = 5, unavailable = 6, av1 = 8 };
+
+inline const char* VideoCodecName(OutputKind kind) {
+  switch (kind) {
+    case OutputKind::h264: return "h264";
+    case OutputKind::vp8: return "vp8";
+    case OutputKind::av1: return "av1";
+    default: return "";
+  }
+}
 
 // The caller owns the handle. One lock keeps each SMED envelope contiguous.
 class ProtocolWriter final {

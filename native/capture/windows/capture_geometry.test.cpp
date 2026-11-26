@@ -6,6 +6,12 @@
 
 int main() {
   using namespace piik::capture;
+  assert(SuspendedWindowFrame({146, 20}, {930, 1004}, {160, 28}));
+  assert(SuspendedWindowFrame({146, 26}, {930, 1004}, {160, 28}));
+  assert(!SuspendedWindowFrame({930, 1004}, {930, 1004}, {160, 28}));
+  assert(!SuspendedWindowFrame({146, 20}, {146, 20}, {160, 28}));
+  assert(!SuspendedWindowFrame({1280, 720}, {1920, 1080}, {160, 28}));
+  assert(!SuspendedWindowFrame({400, 20}, {930, 1004}, {160, 28}));
   const SIZE captured{1280, 960};
   const SIZE monitor{1920, 1080};
   const auto presentation = [&](DISPLAYCONFIG_SCALING scaling,

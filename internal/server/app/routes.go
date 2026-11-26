@@ -77,6 +77,7 @@ func (s *Server) route(
 			return
 		}
 		sendJSON(writer, http.StatusOK, protocol.RuntimeCapabilities{
+			AV1:                        true,
 			Sfu:                        s.config.SFU != nil,
 			SfuOnly:                    s.config.SFU != nil && s.config.SFU.Only,
 			NatPrediction:              s.config.NATPredictionEnabled && !(s.config.SFU != nil && s.config.SFU.Only),

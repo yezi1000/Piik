@@ -8,7 +8,7 @@ import {
   createStatsAccumulator,
   decodedVideoFrames,
 } from "../webrtc/stats";
-import { preferScreenAudioStereo } from "../webrtc/opus-receive-sdp";
+import { createScreenReceiveAnswer } from "../webrtc/screen-receive-answer";
 import { requireReceivingVideo, VideoReceiveRejectedError } from "../webrtc/video-codec";
 import { observeDecodedFrameProof } from "../media/decoded-frame-proof";
 import { SfuPeer, type SfuConnectionConfig } from "./peer";
@@ -104,7 +104,7 @@ export class SfuSubscriber {
           throw new Error("SFU subscriber expected an offer");
         await peer.waitForOperation(() => peer.pc.setRemoteDescription(description));
         if (this.peer !== peer) return;
-        const answer = preferScreenAudioStereo(await peer.waitForOperation(() => peer.pc.createAnswer()));
+        const answer = await peer.waitForOperation(() => createScreenReceiveAnswer(peer.pc));
         requireReceivingVideo(description, answer);
         await peer.sendDescription(answer);
         if (peer.pc.connectionState === "connected") this.restartPending = false;

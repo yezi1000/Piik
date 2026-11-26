@@ -1,7 +1,7 @@
 import { parse } from "sdp-transform";
 
-export type BrowserVideoCodec = "h264" | "vp8";
-export type BrowserVideoCodecMode = "vp8" | "auto" | "h264";
+export type BrowserVideoCodec = "h264" | "vp8" | "av1";
+export type BrowserVideoCodecMode = BrowserVideoCodec | "auto";
 
 export interface BrowserVideoCodecPreference {
   primary: BrowserVideoCodec;
@@ -54,9 +54,32 @@ function h264ModeOneCodecs(codecs: readonly RTCRtpCodec[]): RTCRtpCodec[] {
   });
 }
 
+export function isAV1MainFormat(fmtp: string): boolean {
+  return fmtp.split(";").every(part => {
+    const [key, value] = part.split(/=(.*)/, 2);
+    switch (key?.trim().toLowerCase()) {
+      case "profile": return value?.trim() === "0";
+      case "tier": return ["0", "1"].includes(value?.trim() ?? "");
+      default: return true;
+    }
+  });
+}
+
+function av1Codecs(codecs: readonly RTCRtpCodec[]): RTCRtpCodec[] {
+  return codecs.filter(value => value.mimeType.toLowerCase() === "video/av1" &&
+    isAV1MainFormat(value.sdpFmtpLine ?? ""));
+}
+
 export function supportsH264Receive(): boolean {
   return typeof RTCRtpReceiver !== "undefined" &&
     h264ModeOneCodecs(RTCRtpReceiver.getCapabilities?.("video")?.codecs ?? []).length > 0;
+}
+
+export function supportsVideoReceive(codec: BrowserVideoCodec): boolean {
+  if (codec === "h264") return supportsH264Receive();
+  if (typeof RTCRtpReceiver === "undefined") return false;
+  const codecs = RTCRtpReceiver.getCapabilities?.("video")?.codecs ?? [];
+  return codec === "av1" ? av1Codecs(codecs).length > 0 : vp8Codecs(codecs).length > 0;
 }
 
 function repairCodecs(codecs: readonly RTCRtpCodec[]): RTCRtpCodec[] {
@@ -95,13 +118,13 @@ export function applyVideoCodecPreference(
   ) {
     return false;
   }
-  const h264 =
-    preference.primary === "h264" ? h264ModeOneCodecs(codecs) : [];
-  if (preference.primary === "h264" && h264.length === 0) {
+  const primary = preference.primary === "h264" ? h264ModeOneCodecs(codecs)
+    : preference.primary === "av1" ? av1Codecs(codecs) : [];
+  if (preference.primary !== "vp8" && primary.length === 0) {
     return false;
   }
   return applyCodecs(transceiver, [
-    ...h264,
+    ...primary,
     ...(preference.primary === "vp8" || preference.vp8Fallback ? vp8 : []),
     ...repairCodecs(codecs),
   ]);

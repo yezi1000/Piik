@@ -724,6 +724,7 @@ export const zh = {
   "host.advanced.codec.autoHint": "自动选择",
   "host.advanced.codec.vp8Hint": "兼容优先",
   "host.advanced.codec.h264Hint": "硬件优先",
+  "host.advanced.codec.av1Hint": "低码率下保留更多细节；需要观众设备支持",
 
   "host.details": "连接详情",
   "host.details.show": "显示连接详情",
@@ -887,7 +888,7 @@ export const zh = {
   "host.notice.sfuRecovering": "服务器中转的画面来源未切换成功，正在恢复观看连接",
   "host.password.inputPlaceholder": "输入密码",
 
-  "stats.warn.codec": "视频编码为 {codec}，预期 H264 或 VP8",
+  "stats.warn.codec": "视频编码为 {codec}，预期 H264、VP8 或 AV1",
   "stats.warn.audioCodec": "音频编码为 {codec}，预期 Opus",
 
   "viewer.msg.joinUnavailable": "暂时无法加入房间",

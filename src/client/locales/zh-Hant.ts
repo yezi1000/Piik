@@ -810,7 +810,7 @@ export const zhHant: Partial<Record<CopyKey, string>> = {
   "host.notice.reconnecting": "部分觀眾正在重新連線",
   "host.notice.sfuRecovering": "伺服器中轉的畫面來源未切換成功，正在恢復觀看連線",
   "host.password.inputPlaceholder": "輸入密碼",
-  "stats.warn.codec": "視訊編碼為 {codec}，預期 H264 或 VP8",
+  "stats.warn.codec": "視訊編碼為 {codec}，預期 H264、VP8 或 AV1",
   "stats.warn.audioCodec": "音訊編碼為 {codec}，預期 Opus",
   "viewer.msg.joinUnavailable": "暫時無法加入房間",
   "viewer.stageAria": "共享畫面",

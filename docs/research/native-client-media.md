@@ -6,6 +6,76 @@
 - Status: Windows physical native Host and Viewer gates passed; both macOS
   architectures compile and pass packaged startup; macOS/Linux physical media gates remain open
 
+## Low-Bitrate Game Capture (2026-11-25)
+
+A local SDR game recording supplied three eight-second gameplay segments,
+normalized from 1080p120 to 1080p60. Inventory/menu footage was excluded.
+The 24-second, 1440-frame comparison used the same FFV1 reference and
+FFmpeg/libvmaf, on an RTX 5090 D with driver 621.01. The private recording
+and decoded images are not repository fixtures.
+
+| Encoder path | Target Mbps | Actual Mbps | VMAF mean | VMAF p5 |
+| --- | ---: | ---: | ---: | ---: |
+| H264 NVENC, low latency | 1 | 1.008 | 46.71 | 24.92 |
+| AV1 NVENC, low latency | 1 | 1.016 | 66.22 | 36.62 |
+| H264 NVENC, low latency | 2 | 2.005 | 65.75 | 34.29 |
+| AV1 NVENC, low latency | 2 | 2.016 | 78.15 | 50.95 |
+| H264 NVENC, low latency | 4 | 4.020 | 79.56 | 56.76 |
+| AV1 NVENC, low latency | 4 | 4.026 | 86.60 | 66.17 |
+| H264 Media Foundation | 2 | 2.005 | 63.17 | 33.00 |
+| AV1 Media Foundation | 2 | 2.036 | 76.73 | 48.70 |
+
+NVENC low-latency controls used P5/LL, CBR, no B frames, no lookahead/AQ,
+a two-second GOP and 0.5-second VBV. A P6/HQ comparison with eight-frame
+lookahead, spatial AQ and quarter-resolution multipass did not improve mean
+VMAF on these segments. H264 High profile improved the 2 Mbps control to
+66.56, still below AV1's 78.15. This supports adding optional hardware AV1
+before adding encoder latency or changing the shared adaptation policy.
+
+The closer Media Foundation comparison used NV12, CBR, display-remoting
+scenario and quality-versus-speed 50, with driver-default VBV. It establishes
+an API-level codec comparison, not identical settings to Piik's live adapter.
+Offline throughput around five times realtime does not measure encode latency,
+end-to-end delay or simultaneous game/GPU contention. VMAF and the observed
+reduction in block artifacts describe this recording, not every game.
+
+The production NVIDIA MFT can declare a 1920x1088 sequence maximum for a
+smaller current frame. AV1 sequence maxima must bound decoder storage and
+contain the frame envelope; they are not an equality check against current
+dimensions. A separate physical run also exposed WGC's delayed minimized
+title-bar frame during profile replacement. The capture owner must suspend
+that absent client picture rather than initialize an encoder for it.
+The failing transition declared 931x1005 content over a still-held 146x21
+texture. Checking only `ContentSize` therefore missed it. The final capture
+check uses the raster after clipping to texture storage, the OS minimized-window
+extent and retained normal placement. It suspended both the small declaration
+and the larger declaration over the small texture during the physical repeat.
+
+Chrome 158 accepted two AV1 send RIDs but encoded only the first, half-size
+RID. Browser AV1 therefore uses one full-size encoding. The corrected local
+embedded-SFU gate decoded 1280x720 and a live 852x480 replacement, retained
+connections through bitrate updates, recovered subscriptions/page reload and
+retired publication with complete cleanup. This does not establish AV1
+simulcast, SVC or encoder-pool support.
+
+The Windows Native AV1 embedded-SFU arm also passed: 300 consecutive decoded
+frame callbacks at 666x720 within the source ceiling, then a live 444x480 output,
+with audio, numeric rate updates, subscription/page-reload recovery and cleanup.
+The source window was portrait; these dimensions preserve its aspect ratio.
+The normal Native Host/Viewer page gate subsequently passed with AV1: live
+size/FPS/bitrate updates, pause/resume, minimized profile replacement, window
+resize/fullscreen/minimize/restore, source replacement, source-closure retirement
+and replacement Viewer acquisition. All process, port and profile cleanup checks
+passed. The final raster check passed complete AV1 and H264 repeats. The Viewer
+is kept visible during source window transitions so Browser occlusion does not
+turn suspended local playback into a capture-failure result.
+These are local Windows/NVIDIA/Chrome controls, not Internet-loss or
+concurrent-game-load measurements.
+
+The existing [AV1 RTP specification](https://aomediacodec.github.io/av1-rtp-spec/)
+and Pion payloader own wire framing; Media Foundation owns hardware coding.
+No handwritten AV1 encoder or new encoding dependency is introduced.
+
 ## Windows Audio Exclusion
 
 Default display capture reads the current default render endpoint; process

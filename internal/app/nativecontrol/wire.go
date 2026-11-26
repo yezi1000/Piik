@@ -26,7 +26,10 @@ type requestFailedResponse struct {
 	Code string `json:"code"`
 }
 
-type captureOptionsRequest requestEnvelope
+type captureOptionsRequest struct {
+	requestEnvelope
+	AV1 bool `json:"av1,omitempty"`
+}
 type listSourcesRequest requestEnvelope
 
 type sourcePreviewRequest struct {
@@ -185,6 +188,7 @@ type prepareLocalEdgeRequest struct {
 }
 
 type receiveOfferRequest struct {
+	AV1           bool        `json:"av1,omitempty"`
 	Version       int         `json:"version"`
 	ID            string      `json:"id"`
 	Type          string      `json:"type"`

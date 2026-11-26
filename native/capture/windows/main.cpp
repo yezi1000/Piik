@@ -1124,7 +1124,7 @@ ProductArguments ParseProductArguments(int count, wchar_t** values) {
     arguments.profile.bit_rate = ParseIndex(values[17], "argument-bitrate");
     arguments.profile.preference = ParseDegradationPreference(values[19]);
     const std::wstring codec(values[21]);
-    if (codec != L"auto" && codec != L"h264" && codec != L"vp8") {
+    if (codec != L"auto" && codec != L"h264" && codec != L"vp8" && codec != L"av1") {
       Fail("argument-codec", "video codec is unsupported");
     }
     arguments.codec = NarrowAscii(codec);
@@ -1270,6 +1270,18 @@ class AudioCapabilityProbe final {
   const Clock::time_point deadline_;
 };
 
+void AppendHardwareEncoders(std::ostream& output, const ActivationList& encoders) {
+  for (UINT32 index = 0; index < encoders.count; ++index) {
+    if (index != 0) output << ',';
+    auto* encoder = encoders.values[index];
+    GUID clsid = {};
+    Check(encoder->GetGUID(MFT_TRANSFORM_CLSID_Attribute, &clsid), "mft-probe-clsid");
+    output << "{\"index\":" << index << ",\"name\":"
+           << JSONString(NarrowAscii(GetOptionalString(encoder, MFT_FRIENDLY_NAME_Attribute)))
+           << ",\"identity\":" << JSONString(GuidString(clsid)) << '}';
+  }
+}
+
 void WriteCapabilityProbe(AudioCapabilityProbe audio = AudioCapabilityProbe()) {
   const UINT32 build = WindowsBuild();
   bool window_capture = false;
@@ -1303,20 +1315,18 @@ void WriteCapabilityProbe(AudioCapabilityProbe audio = AudioCapabilityProbe()) {
            << ",\"identity\":"
            << JSONString(LuidString(adapter.description.AdapterLuid))
            << ",\"hardwareH264\":[";
-    for (UINT32 encoder_index = 0; encoder_index < encoders.count;
-         ++encoder_index) {
-      if (encoder_index != 0) output << ',';
-      IMFActivate* encoder = encoders.values[encoder_index];
-      std::wstring name =
-          GetOptionalString(encoder, MFT_FRIENDLY_NAME_Attribute);
-      GUID clsid = {};
-      Check(encoder->GetGUID(MFT_TRANSFORM_CLSID_Attribute, &clsid),
-            "mft-probe-clsid");
-      output << "{\"index\":" << encoder_index << ",\"name\":"
-             << JSONString(NarrowAscii(name)) << ",\"identity\":"
-             << JSONString(GuidString(clsid)) << '}';
+    AppendHardwareEncoders(output, encoders);
+    output << ']';
+    auto av1 = [&adapter]() {
+      try { return EnumerateHardwareEncoders(adapter, false, OutputKind::av1); }
+      catch (const GateFailure&) { return ActivationList{}; }
+    }();
+    if (av1.count > 0) {
+      output << ",\"hardwareAV1\":[";
+      AppendHardwareEncoders(output, av1);
+      output << ']';
     }
-    output << "]}";
+    output << '}';
   }
   const auto capabilities = audio.Snapshot();
   output << "],\"processAudio\":" << (capabilities.process ? "true" : "false")
@@ -1465,13 +1475,14 @@ VideoEncoderSelection SelectVideoEncoder(
     return {};
   }
   const auto deadline = EncoderClock::now() + std::chrono::seconds(4);
+  const auto kind = arguments.codec == "av1" ? OutputKind::av1 : OutputKind::h264;
   std::unique_ptr<VideoEncoder> hardware;
   try {
     std::vector<EncoderCandidate> candidates;
     for (const auto& adapter : adapters) {
       RequireEncoderTime(deadline);
       try {
-        const auto encoders = EnumerateHardwareEncoders(adapter, false);
+        const auto encoders = EnumerateHardwareEncoders(adapter, false, kind);
         for (UINT index = 0; index < encoders.count; ++index)
           candidates.emplace_back(adapter.index, index);
       } catch (const GateFailure& error) {
@@ -1484,9 +1495,9 @@ VideoEncoderSelection SelectVideoEncoder(
           const auto& adapter = SelectAdapter(adapters, candidate.first);
           auto next_device = CreateDevice(adapter);
           try {
-            const auto encoders = EnumerateHardwareEncoders(adapter);
+            const auto encoders = EnumerateHardwareEncoders(adapter, true, kind);
             auto selected = ActivateTransform(encoders, candidate.second, next_device.manager.Get());
-            auto next = std::make_unique<LiveEncoder>(std::move(selected), arguments.profile);
+            auto next = std::make_unique<LiveEncoder>(std::move(selected), arguments.profile, kind);
             if (arguments.codec == "auto") {
               RequireEncoderTime(deadline);
               // Synthesis/conversion belongs to setup, outside the paced measurement.
@@ -1495,7 +1506,7 @@ VideoEncoderSelection SelectVideoEncoder(
                       arguments.profile, deadline, textures))
                 Fail("codec-probe-cadence", "hardware H264 did not sustain the target frame rate");
             }
-            if (arguments.codec == "h264") {
+            if (arguments.codec != "auto") {
               // Explicit H264 validates output without Auto's cadence measurement.
               FrameConverter converter(next_device.device.Get(), arguments.profile);
               const auto texture = CreateEncoderProbeTexture(
@@ -1520,9 +1531,9 @@ VideoEncoderSelection SelectVideoEncoder(
                                     : EncoderClock::duration::zero());
     arguments.adapter_index = chosen.first;
     arguments.mft_index = chosen.second;
-    return {OutputKind::h264, std::move(hardware)};
+    return {kind, std::move(hardware)};
   } catch (const GateFailure&) {
-    if (arguments.codec == "h264") throw;
+    if (arguments.codec != "auto") throw;
     hardware.reset();
   }
   // Without a sustaining hardware candidate, Auto starts the ordinary VP8 path.
@@ -1725,10 +1736,10 @@ void AppendOutputProfiles(std::ostream& output, const std::vector<VideoProfile>&
 
 void WriteVideoStarting(ProtocolWriter& writer, const ProductArguments& arguments,
                         const Adapter& adapter, const VideoEncoderSelection& encoder) {
-  const bool hardware = encoder.kind == OutputKind::h264;
+  const bool hardware = encoder.kind != OutputKind::vp8;
   std::ostringstream status;
   status << "{\"state\":\"starting\",\"hardwareOnly\":" << (hardware ? "true" : "false")
-         << ",\"codec\":" << JSONString(hardware ? "h264" : "vp8")
+         << ",\"codec\":" << JSONString(piik::capture::VideoCodecName(encoder.kind))
          << ",\"adapterIndex\":" << adapter.index
          << ",\"adapterName\":" << JSONString(NarrowAscii(adapter.description.Description))
          << ",\"adapterIdentity\":" << JSONString(LuidString(adapter.description.AdapterLuid))
@@ -1742,11 +1753,12 @@ void WriteVideoStarting(ProtocolWriter& writer, const ProductArguments& argument
 }
 
 void WriteVideoActive(ProtocolWriter& writer, const ProductArguments& arguments,
-                      bool hardware, const AdaptiveAccessUnit& output) {
+                      OutputKind kind, const AdaptiveAccessUnit& output) {
+  const bool hardware = kind != OutputKind::vp8;
   std::ostringstream status;
   status << "{\"state\":\"active\",\"hardwareOnly\":" << (hardware ? "true" : "false")
-         << ",\"codec\":" << JSONString(hardware ? "h264" : "vp8");
-  if (hardware) {
+         << ",\"codec\":" << JSONString(piik::capture::VideoCodecName(kind));
+  if (kind == OutputKind::h264) {
     const auto profile = InspectAnnexB(output.access_unit.bytes).profile_level_id;
     if (!profile) Fail("capture-active-profile", "first H264 output did not carry an SPS profile");
     status << ",\"profileLevelId\":" << JSONString(*profile);
@@ -1764,7 +1776,8 @@ std::vector<std::unique_ptr<OutputWorker>> CreateOutputWorkers(
     const std::function<void(const AdaptiveAccessUnit&)>& on_active,
     const std::function<void(size_t, std::exception_ptr)>& on_failure,
     const std::function<void()>& on_refresh = {}) {
-  const bool hardware = encoder.kind == OutputKind::h264;
+  const bool hardware = encoder.kind != OutputKind::vp8;
+  const auto kind = encoder.kind;
   const UINT encoder_index = arguments.mft_index;
   const bool capture = arguments.mode == ProductArguments::Mode::video;
   const size_t original_layer = capture && arguments.outputs.size() > 1 ? 1 : 0;
@@ -1774,10 +1787,10 @@ std::vector<std::unique_ptr<OutputWorker>> CreateOutputWorkers(
     const bool original = layer == original_layer;
     AdaptiveEncoder::Factory create;
     if (hardware) {
-      create = [&adapter, &device, encoder_index](const VideoProfile& selected_profile) -> std::unique_ptr<VideoEncoder> {
-        auto activations = EnumerateHardwareEncoders(adapter);
+      create = [&adapter, &device, encoder_index, kind](const VideoProfile& selected_profile) -> std::unique_ptr<VideoEncoder> {
+        auto activations = EnumerateHardwareEncoders(adapter, true, kind);
         auto selected = ActivateTransform(activations, encoder_index, device.manager.Get());
-        return std::make_unique<LiveEncoder>(std::move(selected), selected_profile);
+        return std::make_unique<LiveEncoder>(std::move(selected), selected_profile, kind);
       };
     }
     workers.push_back(std::make_unique<OutputWorker>(
@@ -1912,6 +1925,7 @@ void RunEncodedVideo(ProductArguments arguments) {
   auto encoder = SelectVideoEncoder(arguments, adapters, device);
   const auto& adapter = SelectAdapter(adapters, arguments.adapter_index);
   const bool hardware = arguments.codec == "h264";
+  const auto encoder_kind = encoder.kind;
   ProtocolWriter writer;
   WriteVideoStarting(writer, arguments, adapter, encoder);
   HANDLE input_thread_handle = nullptr;
@@ -1922,7 +1936,7 @@ void RunEncodedVideo(ProductArguments arguments) {
   std::atomic<size_t> failed{0};
   auto workers = CreateOutputWorkers(arguments, adapter, device, writer, std::move(encoder),
       [&](const AdaptiveAccessUnit& output) {
-        if (!active.exchange(true)) WriteVideoActive(writer, arguments, hardware, output);
+        if (!active.exchange(true)) WriteVideoActive(writer, arguments, encoder_kind, output);
       },
       [&](size_t layer, std::exception_ptr error) {
         (void)writer.WriteUnavailable(static_cast<UINT8>(layer), OutputFailureDetail(layer, error));
@@ -2008,7 +2022,7 @@ void RunVideoCapture(ProductArguments arguments) {
   DeviceContext device;
   auto encoder = SelectVideoEncoder(arguments, adapters, device);
   const Adapter& adapter = SelectAdapter(adapters, arguments.adapter_index);
-  const bool hardware = encoder.kind == OutputKind::h264;
+  const auto encoder_kind = encoder.kind;
   piik::capture::CapturePresentation presentation(arguments.target_kind,
                                                       arguments.source_id);
   ProtocolWriter writer;
@@ -2119,7 +2133,7 @@ void RunVideoCapture(ProductArguments arguments) {
     WriteVideoStarting(writer, arguments, adapter, encoder);
     workers = CreateOutputWorkers(arguments, adapter, device, writer, std::move(encoder),
       [&](const AdaptiveAccessUnit& output) {
-        if (!active_status_written.exchange(true)) WriteVideoActive(writer, arguments, hardware, output);
+        if (!active_status_written.exchange(true)) WriteVideoActive(writer, arguments, encoder_kind, output);
       },
       [&](size_t layer, std::exception_ptr error) {
         if (layer == (arguments.outputs.size() > 1 ? 1u : 0u)) {
@@ -2256,6 +2270,32 @@ void RunVideoCapture(ProductArguments arguments) {
           source_description.Width, static_cast<UINT32>(content_size.Width));
       UINT32 content_height = std::min<UINT32>(
           source_description.Height, static_cast<UINT32>(content_size.Height));
+      if (window_target) {
+        const auto window = reinterpret_cast<HWND>(static_cast<UINT_PTR>(arguments.source_id));
+        const auto dpi = GetDpiForWindow(window);
+        const SIZE minimized_size{GetSystemMetricsForDpi(SM_CXMINIMIZED, dpi),
+                             GetSystemMetricsForDpi(SM_CYMINIMIZED, dpi)};
+        WINDOWPLACEMENT placement{};
+        placement.length = sizeof(placement);
+        // ContentSize can advance before the pool's backing texture. Check the
+        // actual raster sent to the codec, using retained restoration geometry.
+        if (GetWindowPlacement(window, &placement)) {
+          const SIZE restored{placement.rcNormalPosition.right - placement.rcNormalPosition.left,
+                              placement.rcNormalPosition.bottom - placement.rcNormalPosition.top};
+          if (content_height <= static_cast<UINT32>(std::max<LONG>(0, minimized_size.cy))) {
+            std::cerr << "event=capture-small-window-frame declaredWidth=" << content_size.Width
+                << " declaredHeight=" << content_size.Height << " rasterWidth=" << content_width
+                << " rasterHeight=" << content_height << " restoredWidth=" << restored.cx
+                << " restoredHeight=" << restored.cy << " minimizedWidth=" << minimized_size.cx
+                << " minimizedHeight=" << minimized_size.cy << '\n';
+          }
+          if (piik::capture::SuspendedWindowFrame(
+                  {static_cast<LONG>(content_width), static_cast<LONG>(content_height)}, restored, minimized_size)) {
+            latest.Close();
+            continue;
+          }
+        }
+      }
       auto input = std::make_shared<CaptureInput>();
       input->texture = sdr.Convert(source.Get(), color);
       input->width = content_width;

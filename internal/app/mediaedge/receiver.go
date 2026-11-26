@@ -27,6 +27,9 @@ type ReceiverEvents struct {
 }
 
 type ReceiverOptions struct {
+	// AV1 is opt-in at the native control boundary so legacy pages never
+	// receive a new codec value in their strict receiver response.
+	AV1          bool
 	Offer        webrtc.SessionDescription
 	ICEServers   []webrtc.ICEServer
 	EdgeCapacity int
@@ -104,7 +107,7 @@ func (engine *Engine) NewReceiver(options ReceiverOptions) (_ *Receiver, _ webrt
 		_ = connection.Close()
 		return nil, webrtc.SessionDescription{}, err
 	}
-	videoCodec, err := selectReceiverVideoCodec(connection)
+	videoCodec, err := selectReceiverVideoCodec(connection, options.AV1)
 	if err != nil {
 		_ = connection.Close()
 		return nil, webrtc.SessionDescription{}, err
@@ -473,6 +476,9 @@ func offerSendsCodec(raw, kind, codecName string) (bool, error) {
 				continue
 			}
 			if codecName != "h264" || forwardableH264(codec.Fmtp) {
+				if codecName == "av1" && !forwarding.IsAV1MainFormat(codec.Fmtp) {
+					continue
+				}
 				return true, nil
 			}
 		}
@@ -480,7 +486,7 @@ func offerSendsCodec(raw, kind, codecName string) (bool, error) {
 	return false, nil
 }
 
-func selectReceiverVideoCodec(connection *webrtc.PeerConnection) (string, error) {
+func selectReceiverVideoCodec(connection *webrtc.PeerConnection, allowAV1 bool) (string, error) {
 	for _, transceiver := range connection.GetTransceivers() {
 		if transceiver.Kind() != webrtc.RTPCodecTypeVideo || transceiver.Receiver() == nil ||
 			(transceiver.Direction() != webrtc.RTPTransceiverDirectionRecvonly &&
@@ -494,6 +500,12 @@ func selectReceiverVideoCodec(connection *webrtc.PeerConnection) (string, error)
 			name := strings.TrimPrefix(strings.ToLower(parameters.MimeType), "video/")
 			if _, supported := videoCodecs[name]; !supported {
 				continue
+			}
+			if name == "av1" && (!allowAV1 || !forwarding.IsAV1MainFormat(parameters.SDPFmtpLine)) {
+				continue
+			}
+			if name == "av1" {
+				parameters.SDPFmtpLine = forwarding.AV1ForwardingFMTP
 			}
 			if name == "h264" && !forwardableH264(parameters.SDPFmtpLine) {
 				continue

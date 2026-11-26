@@ -1,6 +1,7 @@
 import { validatePlaybackBufferTarget, type PlaybackBufferStatus } from "../webrtc/receiver-buffer-target";
 import type { IceConfig, SignalPayload } from "../../shared/protocol";
 import { parse, parsePayloads } from "sdp-transform";
+import { isAV1MainFormat } from "../webrtc/video-codec";
 import { observeDecodedFrameProof } from "../media/decoded-frame-proof";
 import { EMPTY_METRICS, type PeerSnapshot } from "../types";
 import {
@@ -143,9 +144,12 @@ export class NativeCapableViewerPeer implements ViewerMediaPeer {
           }
         }
         if (!this.backend) {
-          const client = offerHasNativeVideoCodec(payload.description.sdp)
+          const baselineCodec = offerHasNativeVideoCodec(payload.description.sdp);
+          const availableClient = (baselineCodec || offerHasNativeVideoCodec(payload.description.sdp, true))
             ? await this.acquireNativeClient().catch(() => null)
             : null;
+          const client = availableClient && (baselineCodec || availableClient.health.nativeMedia.av1 === true)
+            ? availableClient : null;
           if (this.disposed) return;
           this.backend = client
             ? new NativeViewerPeer(
@@ -856,7 +860,7 @@ class NativeViewerPeer implements ViewerMediaPeer {
 
 }
 
-export function offerHasNativeVideoCodec(sdp: string): boolean {
+export function offerHasNativeVideoCodec(sdp: string, allowAV1 = false): boolean {
   try {
     const session = parse(sdp);
     const video = session.media.filter((media) => {
@@ -872,6 +876,10 @@ export function offerHasNativeVideoCodec(sdp: string): boolean {
     return media.rtp.some((codec) => {
       if (!payloads.has(codec.payload) || codec.rate !== 90_000) return false;
       if (codec.codec.toLowerCase() === "vp8") return true;
+      if (codec.codec.toLowerCase() === "av1") {
+        const fmtp = media.fmtp?.find(value => value.payload === codec.payload)?.config ?? "";
+        return allowAV1 && isAV1MainFormat(fmtp);
+      }
       if (codec.codec.toLowerCase() !== "h264") return false;
       return nativeH264Format(media.fmtp?.find(fmtp => fmtp.payload === codec.payload)?.config ?? "");
     });

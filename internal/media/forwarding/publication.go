@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -108,6 +109,9 @@ func NewPublication(options TransportOptions) (_ *Publication, err error) {
 	}
 	settings.BufferFactory = packetBufferFactory(factory)
 	registry := &interceptor.Registry{}
+	if strings.EqualFold(codec.MimeType, webrtc.MimeTypeAV1) {
+		registry.Add(&av1Egress{connection: func() *webrtc.PeerConnection { return publication.PC }})
+	}
 	if err = configureRTCPReports(registry, func(ssrc uint32) *sfu.DownTrack {
 		for _, track := range publication.tracks {
 			if track.SSRC() == ssrc {

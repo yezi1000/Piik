@@ -208,6 +208,7 @@ import {
   automaticVideoCodecPreference,
   manualVideoCodecPreference,
   supportsH264Receive,
+  supportsVideoReceive,
   type BrowserVideoCodec,
   type BrowserVideoCodecMode,
   type BrowserVideoCodecPreference,
@@ -346,6 +347,7 @@ function hostTerminationKey(reason: SignalingTerminationReason): CopyKey {
 }
 
 interface HostPageProps {
+  av1Available?: boolean;
   roomInteractionsAvailable?: boolean;
   roomReactionIds?: readonly string[];
   hostRoomSessionAvailable?: boolean;
@@ -369,6 +371,7 @@ type ShareSourceSelection =
     };
 
 export function HostPage({
+  av1Available = false,
   roomInteractionsAvailable = false,
   roomReactionIds,
   hostRoomSessionAvailable = false,
@@ -1360,7 +1363,7 @@ export function HostPage({
       nativeShareGenerationRef.current === nativeShareId && nativeMediaBridgeRef.current === bridge && !sourceSwitchRef.current;
     setStatusNotice({ key: "host.nativePreviewRecovering" }, "recovering", "warn");
     try {
-      if (videoCodecRef.current.primary === "h264" && !supportsH264Receive()) throw new NativeMediaBridgeError("Native preview codec is unavailable");
+      if (videoCodecRef.current.primary !== "vp8" && !supportsVideoReceive(videoCodecRef.current.primary)) throw new NativeMediaBridgeError("Native preview codec is unavailable");
       bridge = createNativePreview(client, nativeShareId, generation, shareGeneration);
       const preview = await bridge.start(audioAvailableRef.current);
       if (!current()) {
@@ -1473,7 +1476,7 @@ export function HostPage({
       let stream: MediaStream | null = null;
       // The App owns capture. This Browser may be unable to receive its codec.
       try {
-        if (started.codec === "h264" && !supportsH264Receive()) throw new NativeMediaBridgeError("Native preview codec is unavailable");
+        if (started.codec !== "vp8" && !supportsVideoReceive(started.codec)) throw new NativeMediaBridgeError("Native preview codec is unavailable");
         bridge = createNativePreview(client, nativeShareId, generation, shareGeneration);
         stream = await bridge.start(started.audio);
         if (!stream.getVideoTracks().some(track => track.readyState === "live")) throw new NativeMediaBridgeError("Native preview ended during startup");
@@ -1625,6 +1628,7 @@ export function HostPage({
     if (
       !client.health.nativeMedia.video ||
       (!client.health.nativeMedia.hardwareH264 &&
+        !client.health.nativeMedia.hardwareAV1 &&
         !client.health.nativeMedia.softwareVP8)
     ) {
       setNativeSources({ kind: "unsupported" });
@@ -4300,14 +4304,15 @@ export function HostPage({
               <div className="lr-door-group">
                 <span className="lr-door-glyph"><Glyph name="puzzle" size={19} /><Cap k="host.advanced.codec" /></span>
                 <div className="lr-row-group" role="group" aria-label={t("host.advanced.codec")}>
-                  {(["vp8", "auto", "h264"] as const).map(mode => (
+                  {(["vp8", "auto", "h264", ...(av1Available ? ["av1" as const] : [])] as const).map(mode => (
                     <Chip key={mode} name="videoCodec" value={mode} selected={displayedVideoCodecMode === mode}
                       disabled={phase === "starting" || phase === "live"}
                       title={mode === "auto"
                         ? resolvedVideoCodec
                           ? `${t("host.advanced.codec.auto")} (${resolvedVideoCodec.toUpperCase()})`
                           : `${t("host.advanced.codec.auto")}\n${t("host.advanced.codec.autoHint")}`
-                        : `${mode.toUpperCase()}\n${t(mode === "vp8" ? "host.advanced.codec.vp8Hint" : "host.advanced.codec.h264Hint")}`}
+                        : `${mode.toUpperCase()}\n${t(mode === "vp8" ? "host.advanced.codec.vp8Hint"
+                          : mode === "av1" ? "host.advanced.codec.av1Hint" : "host.advanced.codec.h264Hint")}`}
                       hint="hint-codec" onClick={() => changeVideoCodecMode(mode)}>
                       {mode === "auto" && !vis ? t("host.advanced.codec.auto") : mode.toUpperCase()}
                     </Chip>
