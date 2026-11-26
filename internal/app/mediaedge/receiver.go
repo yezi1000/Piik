@@ -476,7 +476,7 @@ func offerSendsCodec(raw, kind, codecName string) (bool, error) {
 				continue
 			}
 			if codecName != "h264" || forwardableH264(codec.Fmtp) {
-				if codecName == "av1" && !forwardableAV1(codec.Fmtp) {
+				if codecName == "av1" && !forwarding.IsAV1MainFormat(codec.Fmtp) {
 					continue
 				}
 				return true, nil
@@ -501,8 +501,11 @@ func selectReceiverVideoCodec(connection *webrtc.PeerConnection, allowAV1 bool) 
 			if _, supported := videoCodecs[name]; !supported {
 				continue
 			}
-			if name == "av1" && (!allowAV1 || !forwardableAV1(parameters.SDPFmtpLine)) {
+			if name == "av1" && (!allowAV1 || !forwarding.IsAV1MainFormat(parameters.SDPFmtpLine)) {
 				continue
+			}
+			if name == "av1" {
+				parameters.SDPFmtpLine = forwarding.AV1ForwardingFMTP
 			}
 			if name == "h264" && !forwardableH264(parameters.SDPFmtpLine) {
 				continue
@@ -514,18 +517,6 @@ func selectReceiverVideoCodec(connection *webrtc.PeerConnection, allowAV1 bool) 
 		}
 	}
 	return "", errors.New("native media receiver offer has no supported video")
-}
-
-func forwardableAV1(fmtp string) bool {
-	// The AV1 RTP specification defaults profile and tier to zero. Do not accept a different
-	// coding profile through MIME-only negotiation and relabel its output.
-	for _, parameter := range strings.Split(fmtp, ";") {
-		key, value, _ := strings.Cut(strings.TrimSpace(parameter), "=")
-		if (strings.EqualFold(key, "profile") || strings.EqualFold(key, "tier")) && strings.TrimSpace(value) != "0" {
-			return false
-		}
-	}
-	return true
 }
 
 func forwardableH264(fmtp string) bool {

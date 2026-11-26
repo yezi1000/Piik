@@ -142,7 +142,7 @@ func (session *Session) Handle(ctx context.Context, payload []byte) (result any,
 		if err := decodeStrict(payload, &request); err != nil || request.Type != envelope.Type {
 			return nil, protocolViolation("native capture-options request is invalid")
 		}
-		adapters := append([]nativecapture.Adapter(nil), session.capabilities.Adapters...)
+		adapters := append([]nativecapture.Adapter{}, session.capabilities.Adapters...)
 		if !request.AV1 {
 			for index := range adapters {
 				adapters[index].HardwareAV1 = nil

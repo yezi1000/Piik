@@ -229,6 +229,9 @@ func TestReceiverRetainsRepairForOnlyTheSelectedCodec(t *testing.T) {
 					if !strings.EqualFold(codec.Name, receiver.Codec()) {
 						t.Fatalf("unexpected primary codec: %v", codec)
 					}
+					if name == "av1" && !strings.Contains(codec.Fmtp, "level-idx=31") {
+						t.Fatalf("forwarding receiver inherited the sender's receive limit: %v", codec)
+					}
 					found := false
 					for _, repair := range codecs {
 						found = found || (strings.EqualFold(repair.Name, "rtx") && repair.Fmtp == fmt.Sprintf("apt=%d", codec.PayloadType))

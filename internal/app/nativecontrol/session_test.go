@@ -821,6 +821,21 @@ func TestCaptureOptionsExposesAV1OnlyToOptedInClients(t *testing.T) {
 	}
 }
 
+func TestCaptureOptionsEmptyInventoryIsJSONArray(t *testing.T) {
+	session := New("missing-capture-process", nativecapture.Capabilities{Adapters: []nativecapture.Adapter{}}, false, nil)
+	t.Cleanup(func() { _ = session.Close() })
+	for _, optIn := range []string{"", `,"av1":true`} {
+		value, err := session.Handle(t.Context(), []byte(`{"version":10,"id":"request_options","type":"capture-options"`+optIn+`}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := json.Marshal(value)
+		if err != nil || !bytes.Contains(data, []byte(`"adapters":[]`)) {
+			t.Fatalf("empty inventory = %s, %v", data, err)
+		}
+	}
+}
+
 func TestQualitySettingsMapOnceIntoNativeMedia(t *testing.T) {
 	settings := qualitySettings{
 		Resolution: protocol.QualityResolution{Width: 2560, Height: 1440}, MaxFramerate: 60, MaxBitrate: 12_000_000,

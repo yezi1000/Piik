@@ -888,7 +888,7 @@ export const zh = {
   "host.notice.sfuRecovering": "服务器中转的画面来源未切换成功，正在恢复观看连接",
   "host.password.inputPlaceholder": "输入密码",
 
-  "stats.warn.codec": "视频编码为 {codec}，预期 H264 或 VP8",
+  "stats.warn.codec": "视频编码为 {codec}，预期 H264、VP8 或 AV1",
   "stats.warn.audioCodec": "音频编码为 {codec}，预期 Opus",
 
   "viewer.msg.joinUnavailable": "暂时无法加入房间",

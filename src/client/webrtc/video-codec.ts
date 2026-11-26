@@ -57,7 +57,11 @@ function h264ModeOneCodecs(codecs: readonly RTCRtpCodec[]): RTCRtpCodec[] {
 export function isAV1MainFormat(fmtp: string): boolean {
   return fmtp.split(";").every(part => {
     const [key, value] = part.split(/=(.*)/, 2);
-    return !["profile", "tier"].includes(key?.trim().toLowerCase() ?? "") || value?.trim() === "0";
+    switch (key?.trim().toLowerCase()) {
+      case "profile": return value?.trim() === "0";
+      case "tier": return ["0", "1"].includes(value?.trim() ?? "");
+      default: return true;
+    }
   });
 }
 

@@ -280,6 +280,10 @@ Viewer decoders. Browser AV1 uses ordinary WebRTC senders and one full-size SFU
 encoding; it does not enter the H264/VP8 shared encoder pool or claim SVC.
 Windows Native AV1 reuses Media Foundation hardware discovery, NV12 surfaces,
 the existing WebRTC encoder adapter and bounded independent output groups.
+Native and SFU senders check each new AV1 sequence against the receiving
+connection's negotiated profile, level and tier. An incompatible sequence
+pauses video on that connection until a compatible sequence starts. Browsers with a default Level 3.1 answer can advertise
+a higher level and tier when WebRTC Media Capabilities reports smooth support.
 It requires an actual AV1 encoder and never silently changes codec on failure.
 Other Native capture platforms retain their existing codecs. Native receivers
 can forward AV1 unchanged; AV1 decode/re-encode derivation at a relay is not

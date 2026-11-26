@@ -43,7 +43,7 @@ var vp8Capability = webrtc.RTPCodecCapability{
 var av1Capability = webrtc.RTPCodecCapability{
 	MimeType:     webrtc.MimeTypeAV1,
 	ClockRate:    videoClockRate,
-	SDPFmtpLine:  "level-idx=5;profile=0;tier=0",
+	SDPFmtpLine:  forwarding.AV1ForwardingFMTP,
 	RTCPFeedback: h264Capability.RTCPFeedback,
 }
 

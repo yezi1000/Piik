@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -97,6 +98,9 @@ func NewTransport(options TransportOptions) (_ *Transport, err error) {
 	}
 	settings.BufferFactory = packetBufferFactory(factory)
 	registry := &interceptor.Registry{}
+	if strings.EqualFold(codec.MimeType, webrtc.MimeTypeAV1) {
+		registry.Add(&av1Egress{connection: func() *webrtc.PeerConnection { return transport.PC }})
+	}
 	// LiveKit records actual paced sends and owns this extension's sequence space.
 	if err = media.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{
 		URI: "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01",

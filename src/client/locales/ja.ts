@@ -810,7 +810,7 @@ export const ja: Partial<Record<CopyKey, string>> = {
   "host.notice.reconnecting": "一部の視聴者が再接続中です",
   "host.notice.sfuRecovering": "サーバー転送のソース切り替えに失敗しました。視聴者の接続を復旧しています",
   "host.password.inputPlaceholder": "パスワードを入力",
-  "stats.warn.codec": "映像コーデックは {codec} です。H264 または VP8 を想定しています",
+  "stats.warn.codec": "映像コーデックは {codec} です。H264、VP8 または AV1 を想定しています",
   "stats.warn.audioCodec": "音声コーデックは {codec} です。Opus を想定しています",
   "viewer.msg.joinUnavailable": "現在ルームに参加できません",
   "viewer.stageAria": "共有映像",

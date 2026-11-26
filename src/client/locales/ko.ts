@@ -810,7 +810,7 @@ export const ko: Partial<Record<CopyKey, string>> = {
   "host.notice.reconnecting": "일부 시청자가 재연결 중이에요",
   "host.notice.sfuRecovering": "서버 전달 소스를 전환하지 못했어요. 시청자 연결을 복구하고 있어요",
   "host.password.inputPlaceholder": "비밀번호 입력",
-  "stats.warn.codec": "영상 코덱이 {codec}이에요. H264 또는 VP8이 필요해요",
+  "stats.warn.codec": "영상 코덱이 {codec}이에요. H264, VP8 또는 AV1이 필요해요",
   "stats.warn.audioCodec": "오디오 코덱이 {codec}이에요. Opus가 필요해요",
   "viewer.msg.joinUnavailable": "지금은 방에 참여할 수 없어요",
   "viewer.stageAria": "공유 화면",

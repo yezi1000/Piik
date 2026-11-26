@@ -888,7 +888,7 @@ export const en: Record<CopyKey, string> = {
   "host.notice.sfuRecovering": "Server forwarding source switch failed; restoring viewer connections",
   "host.password.inputPlaceholder": "Enter password",
 
-  "stats.warn.codec": "Video codec is {codec}; expected H264 or VP8",
+  "stats.warn.codec": "Unexpected video codec {codec}. Expected H264, VP8 or AV1.",
   "stats.warn.audioCodec": "Audio codec is {codec}; expected Opus",
 
   "viewer.msg.joinUnavailable": "Cannot join the room right now",
